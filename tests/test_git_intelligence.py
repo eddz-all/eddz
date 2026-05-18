@@ -9,9 +9,11 @@ from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
+from projectpilot.git.operation_planner import build_add_plan
 from projectpilot.git.parser import parse_ahead_behind
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report
+from projectpilot.git.safe_executor import run_add
 
 
 class GitIntelligenceTests(unittest.TestCase):
@@ -110,13 +112,7 @@ class GitIntelligenceTests(unittest.TestCase):
 
     def test_commit_plan_classifies_changes(self) -> None:
         with git_repo() as repo:
-            (repo / "projectpilot").mkdir()
-            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
-            (repo / "tests" / "test_feature.py").parent.mkdir()
-            (repo / "tests" / "test_feature.py").write_text("def test_ok(): pass\n", encoding="utf-8")
-            (repo / ".projectpilot" / "reports").mkdir(parents=True)
-            (repo / ".projectpilot" / "reports" / "report.md").write_text("generated\n", encoding="utf-8")
-            (repo / "package-lock.json").write_text("{}\n", encoding="utf-8")
+            create_mixed_changes(repo)
 
             plan = build_commit_plan(repo)
 
@@ -129,6 +125,51 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertIn("package-lock.json", review_paths)
             self.assertIn(".projectpilot/reports/report.md", exclude_paths)
             self.assertEqual(plan.suggested_message, "Update intelligent Git assistant")
+
+    def test_add_plan_defaults_to_include_files_only(self) -> None:
+        with git_repo() as repo:
+            create_mixed_changes(repo)
+
+            plan = build_add_plan(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertIn("projectpilot/feature.py", plan.planned_paths)
+            self.assertIn("tests/test_feature.py", plan.planned_paths)
+            self.assertNotIn("package-lock.json", plan.planned_paths)
+            self.assertNotIn(".projectpilot/reports/report.md", plan.planned_paths)
+            self.assertIn("package-lock.json", plan.review_paths)
+            self.assertIn(".projectpilot/reports/report.md", plan.excluded_paths)
+
+    def test_add_plan_allows_explicit_review_paths(self) -> None:
+        with git_repo() as repo:
+            create_mixed_changes(repo)
+
+            plan = build_add_plan(repo, include_paths=["package-lock.json"])
+
+            self.assertIn("package-lock.json", plan.planned_paths)
+
+    def test_add_plan_requires_force_for_excluded_paths(self) -> None:
+        with git_repo() as repo:
+            create_mixed_changes(repo)
+
+            normal_plan = build_add_plan(repo)
+            force_plan = build_add_plan(repo, force_include_paths=[".projectpilot/reports/report.md"])
+
+            self.assertNotIn(".projectpilot/reports/report.md", normal_plan.planned_paths)
+            self.assertIn(".projectpilot/reports/report.md", force_plan.planned_paths)
+
+    def test_add_apply_stages_only_planned_files(self) -> None:
+        with git_repo() as repo:
+            create_mixed_changes(repo)
+
+            result = run_add(repo)
+            staged = run(["git", "diff", "--cached", "--name-only"], repo).stdout.splitlines()
+
+            self.assertTrue(result.success)
+            self.assertIn("projectpilot/feature.py", staged)
+            self.assertIn("tests/test_feature.py", staged)
+            self.assertNotIn("package-lock.json", staged)
+            self.assertNotIn(".projectpilot/reports/report.md", staged)
 
 
 class git_repo:
@@ -150,6 +191,16 @@ def init_repo(repo: Path) -> None:
     (repo / "tracked.txt").write_text("initial\n", encoding="utf-8")
     run(["git", "add", "tracked.txt"], repo)
     run(["git", "commit", "-m", "initial"], repo)
+
+
+def create_mixed_changes(repo: Path) -> None:
+    (repo / "projectpilot").mkdir()
+    (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+    (repo / "tests" / "test_feature.py").parent.mkdir()
+    (repo / "tests" / "test_feature.py").write_text("def test_ok(): pass\n", encoding="utf-8")
+    (repo / ".projectpilot" / "reports").mkdir(parents=True)
+    (repo / ".projectpilot" / "reports" / "report.md").write_text("generated\n", encoding="utf-8")
+    (repo / "package-lock.json").write_text("{}\n", encoding="utf-8")
 
 
 def run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

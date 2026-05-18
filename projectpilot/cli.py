@@ -9,10 +9,13 @@ from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import inspect_repository
+from projectpilot.git.operation_planner import build_add_plan
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report, save_markdown_report
+from projectpilot.git.safe_executor import run_add
 from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
 from projectpilot.models.git_status import GitStatus
+from projectpilot.models.operation_plan import OperationPlan, OperationResult
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,6 +92,47 @@ def build_parser() -> argparse.ArgumentParser:
     add_path_argument(commit_plan_command)
     commit_plan_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     commit_plan_command.set_defaults(handler=handle_git_commit_plan)
+
+    add_plan_command = git_subparsers.add_parser(
+        "add-plan",
+        help="Plan which files should be staged.",
+    )
+    add_path_argument(add_plan_command)
+    add_plan_command.add_argument(
+        "--include",
+        nargs="+",
+        default=[],
+        help="Review-category paths to include in the add plan.",
+    )
+    add_plan_command.add_argument(
+        "--force-include",
+        nargs="+",
+        default=[],
+        help="Exclude-category paths to include anyway.",
+    )
+    add_plan_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    add_plan_command.set_defaults(handler=handle_git_add_plan)
+
+    add_command = git_subparsers.add_parser(
+        "add",
+        help="Stage files through a ProjectPilot add plan.",
+    )
+    add_path_argument(add_command)
+    add_command.add_argument(
+        "--include",
+        nargs="+",
+        default=[],
+        help="Review-category paths to stage.",
+    )
+    add_command.add_argument(
+        "--force-include",
+        nargs="+",
+        default=[],
+        help="Exclude-category paths to stage anyway.",
+    )
+    add_command.add_argument("--apply", action="store_true", help="Actually run git add.")
+    add_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    add_command.set_defaults(handler=handle_git_add)
 
     return parser
 
@@ -219,6 +263,51 @@ def handle_git_commit_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_add_plan(args: argparse.Namespace) -> int:
+    plan = build_add_plan(
+        Path(args.path),
+        include_paths=args.include,
+        force_include_paths=args.force_include,
+    )
+
+    if args.json:
+        print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_operation_plan(plan)
+    return 0
+
+
+def handle_git_add(args: argparse.Namespace) -> int:
+    if not args.apply:
+        plan = build_add_plan(
+            Path(args.path),
+            include_paths=args.include,
+            force_include_paths=args.force_include,
+        )
+        if args.json:
+            print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+            return 0
+
+        print_operation_plan(plan)
+        print()
+        print("Dry run only. Run again with --apply to execute.")
+        return 0
+
+    result = run_add(
+        Path(args.path),
+        include_paths=args.include,
+        force_include_paths=args.force_include,
+    )
+
+    if args.json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_operation_result(result)
+    return 0
+
+
 def print_status(status: GitStatus, analysis) -> None:
     print(f"Repository: {status.repo_path}")
     print(f"Branch: {status.branch or '(detached HEAD)'}")
@@ -262,6 +351,42 @@ def print_commit_plan(plan: CommitPlan) -> None:
     print("Suggested commands:")
     for command in plan.suggested_commands:
         print(f"  {command}")
+
+
+def print_operation_plan(plan: OperationPlan) -> None:
+    print(f"Operation: {plan.operation}")
+    print(f"Repository: {plan.repo_path}")
+    print(f"Risk: {plan.risk}")
+    print(f"Allowed: {'yes' if plan.allowed else 'no'}")
+    print(f"Requires --apply: {'yes' if plan.requires_apply else 'no'}")
+    print(f"Reason: {plan.reason}")
+    print()
+    print_file_group("Planned paths", plan.planned_paths)
+    print_file_group("Review paths", plan.review_paths)
+    print_file_group("Excluded paths", plan.excluded_paths)
+    if plan.blockers:
+        print("Blockers:")
+        for blocker in plan.blockers:
+            print(f"  - {blocker}")
+    if plan.warnings:
+        print("Warnings:")
+        for warning in plan.warnings:
+            print(f"  - {warning}")
+    if plan.command:
+        print("Command:")
+        print("  " + " ".join(plan.command))
+
+
+def print_operation_result(result: OperationResult) -> None:
+    print(f"Operation: {result.operation}")
+    print(f"Success: {'yes' if result.success else 'no'}")
+    output = (result.stdout + result.stderr).strip()
+    if output:
+        print(output)
+    print()
+    print("Updated status:")
+    analysis = analyze_status(result.after_status)
+    print_status(result.after_status, analysis)
 
 
 def print_plan_group(title: str, items: list[CommitPlanItem]) -> None:
