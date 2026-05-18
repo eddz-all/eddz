@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from projectpilot.git.audit import write_audit_entry
 from projectpilot.git.inspector import inspect_repository
 from projectpilot.git.operation_planner import (
     build_add_plan,
@@ -27,7 +28,7 @@ def run_add(
     result = run_git(plan.command[1:], cwd=Path(plan.repo_path))
     after_status = inspect_repository(Path(plan.repo_path))
 
-    return OperationResult(
+    operation_result = OperationResult(
         operation="add",
         success=result.returncode == 0,
         stdout=result.stdout,
@@ -36,6 +37,8 @@ def run_add(
         after_status=after_status,
         plan=plan,
     )
+    write_audit_entry(operation_result)
+    return operation_result
 
 
 def run_commit(path: Path, message: str | None = None) -> OperationResult:
@@ -48,7 +51,7 @@ def run_commit(path: Path, message: str | None = None) -> OperationResult:
     result = run_git(plan.command[1:], cwd=Path(plan.repo_path))
     after_status = inspect_repository(Path(plan.repo_path))
 
-    return OperationResult(
+    operation_result = OperationResult(
         operation="commit",
         success=result.returncode == 0,
         stdout=result.stdout,
@@ -57,6 +60,8 @@ def run_commit(path: Path, message: str | None = None) -> OperationResult:
         after_status=after_status,
         plan=plan,
     )
+    write_audit_entry(operation_result)
+    return operation_result
 
 
 def run_push(path: Path) -> OperationResult:
@@ -69,7 +74,7 @@ def run_push(path: Path) -> OperationResult:
     result = run_git(plan.command[1:], cwd=Path(plan.repo_path))
     after_status = inspect_repository(Path(plan.repo_path))
 
-    return OperationResult(
+    operation_result = OperationResult(
         operation="push",
         success=result.returncode == 0,
         stdout=result.stdout,
@@ -78,6 +83,8 @@ def run_push(path: Path) -> OperationResult:
         after_status=after_status,
         plan=plan,
     )
+    write_audit_entry(operation_result)
+    return operation_result
 
 
 def run_pull(path: Path) -> OperationResult:
@@ -90,7 +97,7 @@ def run_pull(path: Path) -> OperationResult:
     result = run_git(plan.command[1:], cwd=Path(plan.repo_path))
     after_status = inspect_repository(Path(plan.repo_path))
 
-    return OperationResult(
+    operation_result = OperationResult(
         operation="pull",
         success=result.returncode == 0,
         stdout=result.stdout,
@@ -99,3 +106,5 @@ def run_pull(path: Path) -> OperationResult:
         after_status=after_status,
         plan=plan,
     )
+    write_audit_entry(operation_result)
+    return operation_result

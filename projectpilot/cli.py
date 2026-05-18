@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from projectpilot.git.analyzer import analyze_status
+from projectpilot.git.audit import read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import inspect_repository
@@ -18,6 +19,7 @@ from projectpilot.git.operation_planner import (
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report, save_markdown_report
 from projectpilot.git.safe_executor import run_add, run_commit, run_pull, run_push
+from projectpilot.models.audit_log import AuditEntry
 from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
 from projectpilot.models.git_status import GitStatus
 from projectpilot.models.operation_plan import OperationPlan, OperationResult
@@ -166,6 +168,20 @@ def build_parser() -> argparse.ArgumentParser:
     pull_command.add_argument("--apply", action="store_true", help="Actually run git pull --ff-only.")
     pull_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     pull_command.set_defaults(handler=handle_git_pull)
+
+    audit_command = git_subparsers.add_parser(
+        "audit",
+        help="Show recent ProjectPilot Git operation audit entries.",
+    )
+    add_path_argument(audit_command)
+    audit_command.add_argument("--limit", type=int, default=20, help="Number of audit entries to show, from 1 to 100.")
+    audit_command.add_argument(
+        "--operation",
+        choices=["add", "commit", "push", "pull"],
+        help="Filter audit entries by operation.",
+    )
+    audit_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    audit_command.set_defaults(handler=handle_git_audit)
 
     return parser
 
@@ -407,6 +423,17 @@ def handle_git_pull(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_audit(args: argparse.Namespace) -> int:
+    entries = read_audit_entries(Path(args.path), limit=args.limit, operation=args.operation)
+
+    if args.json:
+        print(json.dumps([entry.to_dict() for entry in entries], ensure_ascii=False, indent=2))
+        return 0
+
+    print_audit_entries(entries)
+    return 0
+
+
 def print_status(status: GitStatus, analysis) -> None:
     print(f"Repository: {status.repo_path}")
     print(f"Branch: {status.branch or '(detached HEAD)'}")
@@ -489,6 +516,39 @@ def print_operation_result(result: OperationResult) -> None:
     print("Updated status:")
     analysis = analyze_status(result.after_status)
     print_status(result.after_status, analysis)
+
+
+def print_audit_entries(entries: list[AuditEntry]) -> None:
+    if not entries:
+        print("No ProjectPilot Git audit entries found.")
+        return
+
+    print("Recent Git operations:")
+    print()
+    for index, entry in enumerate(entries, start=1):
+        status = "success" if entry.success else "failed"
+        print(f"{index}. {entry.timestamp} {entry.operation} {status}")
+        print(f"   branch: {entry.branch or '(detached HEAD)'}")
+        print(f"   command: {' '.join(entry.command)}")
+        print(f"   before: {short_commit(entry.before_commit)}")
+        print(f"   after: {short_commit(entry.after_commit)}")
+        print(f"   clean: {format_bool(entry.before_clean)} -> {format_bool(entry.after_clean)}")
+        if entry.stdout_summary:
+            print(f"   stdout: {entry.stdout_summary.splitlines()[0]}")
+        if entry.stderr_summary:
+            print(f"   stderr: {entry.stderr_summary.splitlines()[0]}")
+
+
+def short_commit(commit: str | None) -> str:
+    if not commit:
+        return "unknown"
+    if commit == "(initial)":
+        return commit
+    return commit[:7]
+
+
+def format_bool(value: bool) -> str:
+    return "yes" if value else "no"
 
 
 def print_plan_group(title: str, items: list[CommitPlanItem]) -> None:

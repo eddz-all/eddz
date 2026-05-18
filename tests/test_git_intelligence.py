@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from projectpilot.git.analyzer import analyze_status
+from projectpilot.git.audit import audit_log_path, read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
@@ -176,6 +177,27 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertNotIn("package-lock.json", staged)
             self.assertNotIn(".projectpilot/reports/report.md", staged)
 
+    def test_add_apply_writes_audit_entry(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+
+            run_add(repo)
+            entries = read_audit_entries(repo)
+
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].operation, "add")
+            self.assertEqual(entries[0].command, ["git", "add", "--", "projectpilot/feature.py"])
+
+    def test_dry_run_plan_does_not_write_audit(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+
+            build_add_plan(repo)
+
+            self.assertFalse(audit_log_path(repo).exists())
+
     def test_commit_plan_blocks_without_staged_files(self) -> None:
         with git_repo() as repo:
             (repo / "projectpilot").mkdir()
@@ -227,6 +249,36 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertTrue(status.is_clean)
             self.assertIn("Add demo feature", run(["git", "log", "-1", "--pretty=%s"], repo).stdout)
 
+    def test_commit_apply_writes_audit_entry(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            run(["git", "add", "projectpilot/feature.py"], repo)
+
+            run_commit(repo, message="Add demo feature")
+            entries = read_audit_entries(repo, operation="commit")
+
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].operation, "commit")
+            self.assertNotEqual(entries[0].before_commit, entries[0].after_commit)
+            self.assertTrue(entries[0].after_clean)
+
+    def test_audit_limit_and_operation_filter(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+
+            run_add(repo)
+            run_commit(repo, message="Add demo feature")
+
+            latest = read_audit_entries(repo, limit=1)
+            add_entries = read_audit_entries(repo, operation="add")
+
+            self.assertEqual(len(latest), 1)
+            self.assertEqual(latest[0].operation, "commit")
+            self.assertEqual(len(add_entries), 1)
+            self.assertEqual(add_entries[0].operation, "add")
+
     def test_push_plan_blocks_without_upstream(self) -> None:
         with git_repo() as repo:
             plan = build_push_operation_plan(repo)
@@ -250,9 +302,12 @@ class GitIntelligenceTests(unittest.TestCase):
 
             result = run_push(repo)
             status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="push")
 
             self.assertTrue(result.success)
             self.assertEqual(status.ahead, 0)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].operation, "push")
 
     def test_push_dry_run_plan_does_not_push(self) -> None:
         with remote_git_repo() as repo:
@@ -299,10 +354,13 @@ class GitIntelligenceTests(unittest.TestCase):
 
             result = run_pull(repo)
             status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="pull")
 
             self.assertTrue(result.success)
             self.assertEqual(status.behind, 0)
             self.assertTrue((repo / "remote.txt").exists())
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].operation, "pull")
 
     def test_pull_dry_run_plan_does_not_pull(self) -> None:
         with remote_git_repo() as repo:

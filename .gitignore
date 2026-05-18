@@ -11,4 +11,5 @@ build/
 .venv/
 venv/
 .projectpilot/reports/
+.projectpilot/audit/
 .DS_Store
