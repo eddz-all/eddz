@@ -110,3 +110,44 @@ environment = detect_local_environment("/path/to/project")
 ```
 
 Both functions return structured `dict` data. They do not write to the database or call backend APIs. The backend can store successful results as `GitStatus` and `EnvironmentSnapshot`, and can handle failures through the shared `success`, `error_type`, and `message` fields.
+
+## Agent Connection Helper
+
+For polling-mode integration, configure this machine once:
+
+```bash
+projectpilot agent setup \
+  --server-url http://backend.example.test \
+  --machine-id eddz-mac \
+  --allowed-root /Users/eddz/work
+```
+
+The setup command prompts for the agent token and stores the config in `~/.projectpilot/agent.json`.
+
+Start the agent:
+
+```bash
+projectpilot agent connect
+```
+
+For backend development, process one task and exit:
+
+```bash
+projectpilot agent connect --once --json
+```
+
+The backend contract for the MVP is:
+
+```text
+POST /agent/poll
+POST /agent/tasks/{task_id}/result
+```
+
+The agent only supports read-only tasks in this phase:
+
+```text
+detect_git
+detect_environment
+```
+
+Every task path must be inside `allowed-root`. Tasks outside that directory are rejected with `path_not_allowed`.

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+from getpass import getpass
 import json
 import sys
 from pathlib import Path
 
 from projectpilot import __version__
+from projectpilot.agent.client import poll_and_run_once, run_connect_loop
+from projectpilot.agent.config import build_config, default_config_path, load_config, save_config
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
@@ -206,6 +209,42 @@ def build_parser() -> argparse.ArgumentParser:
     add_path_argument(quickstart_command)
     quickstart_command.set_defaults(handler=handle_git_quickstart)
 
+    agent_parser = subparsers.add_parser("agent", help="Connect this machine to a ProjectPilot backend.")
+    agent_subparsers = agent_parser.add_subparsers(dest="agent_command")
+
+    setup_command = agent_subparsers.add_parser(
+        "setup",
+        help="Save backend connection settings for this machine.",
+    )
+    add_agent_config_argument(setup_command)
+    setup_command.add_argument("--server-url", help="Backend base URL, such as http://127.0.0.1:8000.")
+    setup_command.add_argument("--token", help="Agent token. If omitted, ProjectPilot prompts for it.")
+    setup_command.add_argument("--machine-id", help="Machine identifier shown in the backend.")
+    setup_command.add_argument(
+        "--allowed-root",
+        help="Root directory this agent is allowed to inspect. Defaults to the current directory.",
+    )
+    setup_command.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds.")
+    setup_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    setup_command.set_defaults(handler=handle_agent_setup)
+
+    status_command = agent_subparsers.add_parser("status", help="Show saved agent connection settings.")
+    add_agent_config_argument(status_command)
+    status_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    status_command.set_defaults(handler=handle_agent_status)
+
+    connect_command = agent_subparsers.add_parser("connect", help="Poll the backend for read-only detection tasks.")
+    add_agent_config_argument(connect_command)
+    connect_command.add_argument("--server-url", help="Override backend base URL.")
+    connect_command.add_argument("--token", help="Override agent token.")
+    connect_command.add_argument("--machine-id", help="Override machine identifier.")
+    connect_command.add_argument("--allowed-root", help="Override allowed root directory.")
+    connect_command.add_argument("--interval", type=float, help="Override polling interval in seconds.")
+    connect_command.add_argument("--timeout", type=int, default=15, help="HTTP timeout in seconds.")
+    connect_command.add_argument("--once", action="store_true", help="Poll and process at most one task.")
+    connect_command.add_argument("--json", action="store_true", help="Print machine-readable JSON for --once.")
+    connect_command.set_defaults(handler=handle_agent_connect)
+
     return parser
 
 
@@ -215,6 +254,14 @@ def add_path_argument(parser: argparse.ArgumentParser) -> None:
         nargs="?",
         default=".",
         help="Repository path. Defaults to the current directory.",
+    )
+
+
+def add_agent_config_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Agent config path. Defaults to ~/.projectpilot/agent.json.",
     )
 
 
@@ -493,6 +540,109 @@ def handle_git_quickstart(args: argparse.Namespace) -> int:
     print("6. Review ProjectPilot operation history")
     print(f"   projectpilot git audit {path}")
     return 0
+
+
+def handle_agent_setup(args: argparse.Namespace) -> int:
+    config_path = args.config or default_config_path()
+    server_url = args.server_url or input("Backend server URL: ").strip()
+    token = args.token or getpass("Agent token: ").strip()
+    machine_id = args.machine_id or input("Machine ID [local hostname]: ").strip() or None
+    allowed_root = args.allowed_root or input(f"Allowed root [{Path.cwd()}]: ").strip() or str(Path.cwd())
+
+    config = build_config(
+        server_url=server_url,
+        token=token,
+        machine_id=machine_id,
+        allowed_root=allowed_root,
+        interval=args.interval,
+    )
+    saved_path = save_config(config, config_path)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "config_path": str(saved_path),
+                    "config": config.to_dict(mask_token=True),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    print(f"Agent config saved to: {saved_path}")
+    print(f"Server: {config.server_url}")
+    print(f"Machine: {config.machine_id}")
+    print(f"Allowed root: {config.allowed_root}")
+    print()
+    print("Start polling with:")
+    print("  projectpilot agent connect")
+    return 0
+
+
+def handle_agent_status(args: argparse.Namespace) -> int:
+    config_path = args.config or default_config_path()
+    config = load_config(config_path)
+    payload = {
+        "config_path": str(config_path.expanduser()),
+        "allowed_root_exists": config.allowed_root.exists(),
+        "config": config.to_dict(mask_token=True),
+    }
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    print("ProjectPilot Agent")
+    print()
+    print(f"Config: {payload['config_path']}")
+    print(f"Server: {config.server_url}")
+    print(f"Machine: {config.machine_id}")
+    print(f"Allowed root: {config.allowed_root}")
+    print(f"Allowed root exists: {'yes' if payload['allowed_root_exists'] else 'no'}")
+    print(f"Interval: {config.interval}s")
+    print(f"Token: {config.to_dict(mask_token=True)['token']}")
+    return 0
+
+
+def handle_agent_connect(args: argparse.Namespace) -> int:
+    config = load_or_build_agent_config(args)
+
+    if args.once and args.json:
+        result = poll_and_run_once(config, timeout=args.timeout)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    run_connect_loop(config, once=args.once, timeout=args.timeout)
+    return 0
+
+
+def load_or_build_agent_config(args: argparse.Namespace):
+    config_path = args.config or default_config_path()
+    if config_path.expanduser().exists():
+        config = load_config(config_path)
+        server_url = args.server_url or config.server_url
+        token = args.token or config.token
+        machine_id = args.machine_id or config.machine_id
+        allowed_root = args.allowed_root or config.allowed_root
+        interval = args.interval if args.interval is not None else config.interval
+    else:
+        if not (args.server_url and args.token and args.allowed_root):
+            raise RuntimeError("Agent config not found. Run `projectpilot agent setup` first.")
+        server_url = args.server_url
+        token = args.token
+        machine_id = args.machine_id
+        allowed_root = args.allowed_root
+        interval = args.interval if args.interval is not None else 5.0
+
+    return build_config(
+        server_url=server_url,
+        token=token,
+        machine_id=machine_id,
+        allowed_root=allowed_root,
+        interval=interval,
+    )
 
 
 def print_status(status: GitStatus, analysis) -> None:
