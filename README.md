@@ -30,6 +30,8 @@ python3 -m projectpilot git commit /path/to/repo
 python3 -m projectpilot git commit /path/to/repo --apply
 python3 -m projectpilot git push /path/to/repo
 python3 -m projectpilot git push /path/to/repo --apply
+python3 -m projectpilot git pull /path/to/repo
+python3 -m projectpilot git pull /path/to/repo --apply
 ```
 
 After installation, the same commands are available through:
@@ -49,3 +51,5 @@ This version is conservative by design. It can run `fetch`, which updates remote
 `git commit` is dry-run unless `--apply` is present. It only commits files that are already staged and will not automatically add unstaged or untracked files.
 
 `git push` is dry-run unless `--apply` is present. It only runs a normal `git push` when the branch has an upstream, is ahead of upstream, and is not behind or diverged. Force push is not supported.
+
+`git pull` is dry-run unless `--apply` is present. It only runs `git pull --ff-only` when the working tree is clean, the branch has an upstream, and the local branch is behind but not ahead or diverged.

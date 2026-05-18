@@ -9,11 +9,16 @@ from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
-from projectpilot.git.operation_planner import build_add_plan, build_commit_operation_plan, build_push_operation_plan
+from projectpilot.git.operation_planner import (
+    build_add_plan,
+    build_commit_operation_plan,
+    build_pull_operation_plan,
+    build_push_operation_plan,
+)
 from projectpilot.git.parser import parse_ahead_behind
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report
-from projectpilot.git.safe_executor import run_add, run_commit, run_push
+from projectpilot.git.safe_executor import run_add, run_commit, run_pull, run_push
 
 
 class GitIntelligenceTests(unittest.TestCase):
@@ -262,19 +267,73 @@ class GitIntelligenceTests(unittest.TestCase):
     def test_push_plan_blocks_diverged_branch(self) -> None:
         with remote_git_repo() as repo:
             create_local_commit(repo, "local.txt", "local\n", "local commit")
-
-            with tempfile.TemporaryDirectory() as peer_dir:
-                peer = Path(peer_dir)
-                remote_url = run(["git", "remote", "get-url", "origin"], repo).stdout.strip()
-                run(["git", "clone", remote_url, "."], peer)
-                run(["git", "checkout", "main"], peer)
-                run(["git", "config", "user.name", "ProjectPilot Peer"], peer)
-                run(["git", "config", "user.email", "peer@example.test"], peer)
-                create_local_commit(peer, "peer.txt", "peer\n", "peer commit")
-                run(["git", "push", "origin", "main"], peer)
-
+            create_remote_commit(repo, "peer.txt", "peer\n", "peer commit")
             run(["git", "fetch"], repo)
             plan = build_push_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("diverged", "; ".join(plan.blockers))
+
+    def test_pull_plan_blocks_without_upstream(self) -> None:
+        with git_repo() as repo:
+            plan = build_pull_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("upstream", "; ".join(plan.blockers))
+
+    def test_pull_plan_allows_behind_clean_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+
+            plan = build_pull_operation_plan(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "pull", "--ff-only"])
+            self.assertEqual(plan.planned_paths, ["origin/main -> main"])
+
+    def test_pull_apply_updates_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+
+            result = run_pull(repo)
+            status = inspect_repository(repo)
+
+            self.assertTrue(result.success)
+            self.assertEqual(status.behind, 0)
+            self.assertTrue((repo / "remote.txt").exists())
+
+    def test_pull_dry_run_plan_does_not_pull(self) -> None:
+        with remote_git_repo() as repo:
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+
+            plan = build_pull_operation_plan(repo)
+            status = inspect_repository(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(status.behind, 1)
+            self.assertFalse((repo / "remote.txt").exists())
+
+    def test_pull_plan_blocks_dirty_worktree(self) -> None:
+        with remote_git_repo() as repo:
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+            (repo / "local-draft.txt").write_text("draft\n", encoding="utf-8")
+
+            plan = build_pull_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("Working tree must be clean", "; ".join(plan.blockers))
+
+    def test_pull_plan_blocks_diverged_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_local_commit(repo, "local.txt", "local\n", "local commit")
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+
+            plan = build_pull_operation_plan(repo)
 
             self.assertFalse(plan.allowed)
             self.assertIn("diverged", "; ".join(plan.blockers))
@@ -326,6 +385,18 @@ def create_local_commit(repo: Path, relative_path: str, content: str, message: s
     path.write_text(content, encoding="utf-8")
     run(["git", "add", relative_path], repo)
     run(["git", "commit", "-m", message], repo)
+
+
+def create_remote_commit(repo: Path, relative_path: str, content: str, message: str) -> None:
+    with tempfile.TemporaryDirectory() as peer_dir:
+        peer = Path(peer_dir)
+        remote_url = run(["git", "remote", "get-url", "origin"], repo).stdout.strip()
+        run(["git", "clone", remote_url, "."], peer)
+        run(["git", "checkout", "main"], peer)
+        run(["git", "config", "user.name", "ProjectPilot Peer"], peer)
+        run(["git", "config", "user.email", "peer@example.test"], peer)
+        create_local_commit(peer, relative_path, content, message)
+        run(["git", "push", "origin", "main"], peer)
 
 
 def create_mixed_changes(repo: Path) -> None:
