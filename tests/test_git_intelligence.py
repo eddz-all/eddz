@@ -28,6 +28,25 @@ from projectpilot.git.safe_executor import run_add, run_commit, run_pull, run_pu
 
 
 class GitIntelligenceTests(unittest.TestCase):
+    def test_version_cli_outputs_version(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = cli_main(["--version"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("projectpilot", output.getvalue())
+
+    def test_quickstart_cli_outputs_first_steps(self) -> None:
+        with git_repo() as repo:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = cli_main(["git", "quickstart", str(repo)])
+
+            text = output.getvalue()
+            self.assertEqual(exit_code, 0)
+            self.assertIn("ProjectPilot Git Quickstart", text)
+            self.assertIn("projectpilot git doctor", text)
+
     def test_non_git_directory_has_clear_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(NotGitRepositoryError):

@@ -12,6 +12,15 @@ authors = [
   { name = "ProjectPilot" }
 ]
 dependencies = []
+keywords = ["git", "cli", "developer-tools", "project-management"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Version Control :: Git",
+]
 
 [project.scripts]
 projectpilot = "projectpilot.cli:main"

@@ -1,61 +1,99 @@
 # ProjectPilot
 
-ProjectPilot is starting as an intelligent Git assistant.
+ProjectPilot is an intelligent Git assistant. It helps you understand repository state, plan safe next steps, run controlled Git operations, and review what ProjectPilot executed.
 
-The first MVP focuses on local Git repositories:
+## Install
 
-- collect structured Git status;
-- explain the current repository state;
-- suggest safe next steps;
-- generate Markdown Git status reports;
-- avoid executing high-risk Git operations.
-
-## Usage
-
-Run from this workspace with:
+From this workspace:
 
 ```bash
-python3 -m projectpilot git status /path/to/repo
-python3 -m projectpilot git explain /path/to/repo
-python3 -m projectpilot git suggest /path/to/repo
-python3 -m projectpilot git report /path/to/repo
-python3 -m projectpilot git diff /path/to/repo --stat
-python3 -m projectpilot git log /path/to/repo -n 5
-python3 -m projectpilot git fetch /path/to/repo
-python3 -m projectpilot git commit-plan /path/to/repo
-python3 -m projectpilot git add-plan /path/to/repo
-python3 -m projectpilot git add /path/to/repo
-python3 -m projectpilot git add /path/to/repo --apply
-python3 -m projectpilot git commit /path/to/repo
-python3 -m projectpilot git commit /path/to/repo --apply
-python3 -m projectpilot git push /path/to/repo
-python3 -m projectpilot git push /path/to/repo --apply
-python3 -m projectpilot git pull /path/to/repo
-python3 -m projectpilot git pull /path/to/repo --apply
-python3 -m projectpilot git audit /path/to/repo
-python3 -m projectpilot git doctor /path/to/repo
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -e .
+projectpilot --version
 ```
 
-After installation, the same commands are available through:
+You can also run without installing:
 
 ```bash
-projectpilot git status
+python3 -m projectpilot --version
 ```
 
-## Current Scope
+## Quick Start
 
-This version is conservative by design. It can run `fetch`, which updates remote refs but does not modify working tree files. It does not run `pull`, `push`, `commit`, `reset`, `clean`, or other higher-risk Git operations.
+```bash
+projectpilot git quickstart .
+projectpilot git doctor .
+projectpilot git commit-plan .
+```
 
-`commit-plan` is still read-only. It reviews current local changes, groups files into suggested include / review / exclude buckets, and drafts a commit message plus command sequence for the user to inspect.
+`doctor` is the best daily entry point. It summarizes health, risk, findings, operation readiness, recent audit activity, and the next recommended Git step.
 
-`add-plan` is also read-only. `git add` remains dry-run unless `--apply` is present. By default it stages only files classified as safe to include; review files require `--include`, and excluded files require `--force-include`.
+## Common Workflow
 
-`git commit` is dry-run unless `--apply` is present. It only commits files that are already staged and will not automatically add unstaged or untracked files.
+Review repository health:
 
-`git push` is dry-run unless `--apply` is present. It only runs a normal `git push` when the branch has an upstream, is ahead of upstream, and is not behind or diverged. Force push is not supported.
+```bash
+projectpilot git doctor .
+projectpilot git status .
+projectpilot git suggest .
+```
 
-`git pull` is dry-run unless `--apply` is present. It only runs `git pull --ff-only` when the working tree is clean, the branch has an upstream, and the local branch is behind but not ahead or diverged.
+Review and prepare local changes:
 
-Every `--apply` operation writes a JSONL audit entry to `.projectpilot/audit/git-operations.jsonl`. Use `git audit` to inspect recent ProjectPilot Git operations.
+```bash
+projectpilot git commit-plan .
+projectpilot git add .
+projectpilot git add . --apply
+projectpilot git commit .
+projectpilot git commit . --apply
+```
 
-`git doctor` summarizes repository health, findings, operation readiness, recent audit activity, and the next recommended Git step.
+Sync with upstream when configured:
+
+```bash
+projectpilot git fetch .
+projectpilot git pull .
+projectpilot git pull . --apply
+projectpilot git push .
+projectpilot git push . --apply
+```
+
+Review history:
+
+```bash
+projectpilot git log . -n 5
+projectpilot git audit .
+projectpilot git audit . --operation commit
+```
+
+Generate a report:
+
+```bash
+projectpilot git report .
+```
+
+## Safety Model
+
+ProjectPilot is conservative by design:
+
+- `status`, `explain`, `suggest`, `diff`, `log`, `report`, `commit-plan`, `add-plan`, `doctor`, and `audit` are read-only.
+- `fetch` updates remote refs but does not modify working tree files.
+- `add`, `commit`, `push`, and `pull` are dry-run unless `--apply` is present.
+- `commit` only commits files that are already staged.
+- `push` only runs a normal `git push` when the branch has an upstream, is ahead, and is not behind or diverged.
+- `pull` only runs `git pull --ff-only` when the working tree is clean and the branch is behind but not ahead or diverged.
+- Force push, reset, clean, and rebase are not supported by controlled execution.
+
+Every `--apply` operation writes a JSONL audit entry to `.projectpilot/audit/git-operations.jsonl`. This local audit directory is ignored by Git.
+
+## JSON Output
+
+Several commands support `--json`, including:
+
+```bash
+projectpilot git status . --json
+projectpilot git doctor . --json
+projectpilot git audit . --json
+projectpilot git commit-plan . --json
+```

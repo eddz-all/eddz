@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from projectpilot import __version__
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
@@ -31,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if getattr(args, "version", False):
+        print(f"projectpilot {__version__}")
+        return 0
+
     if not hasattr(args, "handler"):
         parser.print_help()
         return 0
@@ -50,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="projectpilot",
         description="ProjectPilot intelligent Git assistant.",
     )
+    parser.add_argument("--version", action="store_true", help="Show ProjectPilot version and exit.")
     subparsers = parser.add_subparsers(dest="domain")
 
     git_parser = subparsers.add_parser("git", help="Inspect and explain Git repository state.")
@@ -192,6 +198,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_path_argument(doctor_command)
     doctor_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     doctor_command.set_defaults(handler=handle_git_doctor)
+
+    quickstart_command = git_subparsers.add_parser(
+        "quickstart",
+        help="Show the recommended first commands for a repository.",
+    )
+    add_path_argument(quickstart_command)
+    quickstart_command.set_defaults(handler=handle_git_quickstart)
 
     return parser
 
@@ -452,6 +465,33 @@ def handle_git_doctor(args: argparse.Namespace) -> int:
         return 0
 
     print_doctor_report(report)
+    return 0
+
+
+def handle_git_quickstart(args: argparse.Namespace) -> int:
+    path = Path(args.path)
+    print("ProjectPilot Git Quickstart")
+    print()
+    print("1. Check repository health")
+    print(f"   projectpilot git doctor {path}")
+    print()
+    print("2. Review current changes")
+    print(f"   projectpilot git commit-plan {path}")
+    print()
+    print("3. Stage suggested files")
+    print(f"   projectpilot git add {path}")
+    print(f"   projectpilot git add {path} --apply")
+    print()
+    print("4. Commit staged files")
+    print(f"   projectpilot git commit {path}")
+    print(f"   projectpilot git commit {path} --apply")
+    print()
+    print("5. Sync safely when upstream exists")
+    print(f"   projectpilot git pull {path}")
+    print(f"   projectpilot git push {path}")
+    print()
+    print("6. Review ProjectPilot operation history")
+    print(f"   projectpilot git audit {path}")
     return 0
 
 
