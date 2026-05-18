@@ -142,3 +142,64 @@ def build_commit_reason(staged_paths: list[str], suggested_message: str | None) 
     if suggested_message:
         return "Create a commit from currently staged files only."
     return "A commit message is needed before a commit can be created."
+
+
+def build_push_operation_plan(path: Path) -> OperationPlan:
+    status = inspect_repository(path)
+    blockers: list[str] = []
+    warnings: list[str] = []
+    planned_refs: list[str] = []
+
+    if status.state != "normal":
+        blockers.append(f"Repository is in a {status.state} state.")
+    if status.conflicted_files:
+        blockers.append("Conflicted files must be resolved before pushing.")
+    if status.branch is None:
+        blockers.append("Detached HEAD cannot be pushed safely by ProjectPilot.")
+    if not status.remotes:
+        blockers.append("No Git remotes are configured for this repository.")
+    if status.upstream is None:
+        blockers.append("The current branch has no upstream branch configured.")
+    if status.ahead > 0 and status.behind > 0:
+        blockers.append("Local and upstream branches have diverged; push is blocked.")
+    elif status.behind > 0:
+        blockers.append("Local branch is behind upstream; fetch or pull before pushing.")
+    elif status.ahead == 0 and status.upstream is not None:
+        blockers.append("No local commits are ahead of upstream.")
+
+    if status.staged_files:
+        warnings.append("Staged but uncommitted files will not be pushed.")
+    if status.unstaged_files:
+        warnings.append("Unstaged changes will not be pushed.")
+    if status.untracked_files:
+        warnings.append("Untracked files will not be pushed.")
+
+    if status.branch and status.upstream:
+        planned_refs.append(f"{status.branch} -> {status.upstream}")
+
+    command = ["git", "push"] if status.ahead > 0 and not blockers else []
+
+    return OperationPlan(
+        operation="push",
+        repo_path=str(status.repo_path),
+        risk="medium",
+        allowed=bool(command) and not blockers,
+        requires_apply=True,
+        command=command,
+        reason=build_push_reason(status.ahead, status.behind, status.upstream),
+        blockers=blockers,
+        warnings=warnings,
+        planned_paths=planned_refs,
+    )
+
+
+def build_push_reason(ahead: int, behind: int, upstream: str | None) -> str:
+    if upstream is None:
+        return "No push will run because the branch has no upstream."
+    if ahead > 0 and behind == 0:
+        return f"Push {ahead} local commit(s) to upstream."
+    if ahead > 0 and behind > 0:
+        return "No push will run because local and upstream history diverged."
+    if behind > 0:
+        return "No push will run because local branch is behind upstream."
+    return "No push will run because there are no local commits to push."

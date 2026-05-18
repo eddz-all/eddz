@@ -9,11 +9,11 @@ from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
-from projectpilot.git.operation_planner import build_add_plan, build_commit_operation_plan
+from projectpilot.git.operation_planner import build_add_plan, build_commit_operation_plan, build_push_operation_plan
 from projectpilot.git.parser import parse_ahead_behind
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report
-from projectpilot.git.safe_executor import run_add, run_commit
+from projectpilot.git.safe_executor import run_add, run_commit, run_push
 
 
 class GitIntelligenceTests(unittest.TestCase):
@@ -222,12 +222,88 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertTrue(status.is_clean)
             self.assertIn("Add demo feature", run(["git", "log", "-1", "--pretty=%s"], repo).stdout)
 
+    def test_push_plan_blocks_without_upstream(self) -> None:
+        with git_repo() as repo:
+            plan = build_push_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("upstream", "; ".join(plan.blockers))
+
+    def test_push_plan_allows_ahead_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_local_commit(repo, "local.txt", "local\n", "local commit")
+
+            plan = build_push_operation_plan(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "push"])
+            self.assertEqual(plan.planned_paths, ["main -> origin/main"])
+
+    def test_push_apply_pushes_commits(self) -> None:
+        with remote_git_repo() as repo:
+            create_local_commit(repo, "local.txt", "local\n", "local commit")
+
+            result = run_push(repo)
+            status = inspect_repository(repo)
+
+            self.assertTrue(result.success)
+            self.assertEqual(status.ahead, 0)
+
+    def test_push_dry_run_plan_does_not_push(self) -> None:
+        with remote_git_repo() as repo:
+            create_local_commit(repo, "local.txt", "local\n", "local commit")
+
+            plan = build_push_operation_plan(repo)
+            status = inspect_repository(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(status.ahead, 1)
+
+    def test_push_plan_blocks_diverged_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_local_commit(repo, "local.txt", "local\n", "local commit")
+
+            with tempfile.TemporaryDirectory() as peer_dir:
+                peer = Path(peer_dir)
+                remote_url = run(["git", "remote", "get-url", "origin"], repo).stdout.strip()
+                run(["git", "clone", remote_url, "."], peer)
+                run(["git", "checkout", "main"], peer)
+                run(["git", "config", "user.name", "ProjectPilot Peer"], peer)
+                run(["git", "config", "user.email", "peer@example.test"], peer)
+                create_local_commit(peer, "peer.txt", "peer\n", "peer commit")
+                run(["git", "push", "origin", "main"], peer)
+
+            run(["git", "fetch"], repo)
+            plan = build_push_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("diverged", "; ".join(plan.blockers))
+
 
 class git_repo:
     def __enter__(self) -> Path:
         self.temp_dir = tempfile.TemporaryDirectory()
         repo = Path(self.temp_dir.name)
         init_repo(repo)
+        self.repo = repo
+        return repo
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.temp_dir.cleanup()
+
+
+class remote_git_repo:
+    def __enter__(self) -> Path:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        root = Path(self.temp_dir.name)
+        remote = root / "remote.git"
+        repo = root / "repo"
+        remote.mkdir()
+        repo.mkdir()
+        run(["git", "init", "--bare"], remote)
+        init_repo(repo)
+        run(["git", "remote", "add", "origin", str(remote)], repo)
+        run(["git", "push", "-u", "origin", "main"], repo)
         self.repo = repo
         return repo
 
@@ -242,6 +318,14 @@ def init_repo(repo: Path) -> None:
     (repo / "tracked.txt").write_text("initial\n", encoding="utf-8")
     run(["git", "add", "tracked.txt"], repo)
     run(["git", "commit", "-m", "initial"], repo)
+
+
+def create_local_commit(repo: Path, relative_path: str, content: str, message: str) -> None:
+    path = repo / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    run(["git", "add", relative_path], repo)
+    run(["git", "commit", "-m", message], repo)
 
 
 def create_mixed_changes(repo: Path) -> None:
