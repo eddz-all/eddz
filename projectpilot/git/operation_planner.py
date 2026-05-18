@@ -66,7 +66,7 @@ def build_add_plan(
 
 
 def addable_paths(items: list[CommitPlanItem]) -> list[str]:
-    return [item.path for item in items if item.status != "staged"]
+    return [item.path for item in items if item.status in {"unstaged", "staged+unstaged", "untracked"}]
 
 
 def build_add_reason(planned_paths: list[str], include_request: set[str], force_request: set[str]) -> str:
@@ -126,7 +126,7 @@ def build_commit_operation_plan(path: Path, message: str | None = None) -> Opera
 
 
 def staged_items(items: list[CommitPlanItem]) -> list[CommitPlanItem]:
-    return [item for item in items if item.status == "staged"]
+    return [item for item in items if item.status in {"staged", "staged+unstaged"}]
 
 
 def clean_message(message: str | None) -> str | None:

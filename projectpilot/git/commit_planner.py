@@ -94,13 +94,15 @@ def collect_plan_items(status: GitStatus) -> list[CommitPlanItem]:
     items: list[CommitPlanItem] = []
     seen: set[str] = set()
 
-    for path in status.staged_files:
-        items.append(classify_path(path, "staged"))
-        seen.add(path)
-    for path in status.unstaged_files:
-        if path not in seen:
-            items.append(classify_path(path, "unstaged"))
-            seen.add(path)
+    for change in status.changed_files:
+        if change.is_staged and change.is_unstaged:
+            item_status = "staged+unstaged"
+        elif change.is_staged:
+            item_status = "staged"
+        else:
+            item_status = "unstaged"
+        items.append(classify_path(change.path, item_status))
+        seen.add(change.path)
     for path in status.untracked_files:
         if path not in seen:
             items.append(classify_path(path, "untracked"))

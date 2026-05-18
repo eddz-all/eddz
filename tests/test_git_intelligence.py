@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import io
+import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
+from projectpilot.cli import main as cli_main
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import audit_log_path, read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
@@ -177,6 +181,17 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertNotIn("package-lock.json", staged)
             self.assertNotIn(".projectpilot/reports/report.md", staged)
 
+    def test_add_plan_handles_partially_staged_files(self) -> None:
+        with git_repo() as repo:
+            (repo / "tracked.txt").write_text("staged\n", encoding="utf-8")
+            run(["git", "add", "tracked.txt"], repo)
+            (repo / "tracked.txt").write_text("unstaged too\n", encoding="utf-8")
+
+            plan = build_add_plan(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertIn("tracked.txt", plan.planned_paths)
+
     def test_add_apply_writes_audit_entry(self) -> None:
         with git_repo() as repo:
             (repo / "projectpilot").mkdir()
@@ -278,6 +293,21 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertEqual(latest[0].operation, "commit")
             self.assertEqual(len(add_entries), 1)
             self.assertEqual(add_entries[0].operation, "add")
+
+    def test_audit_cli_outputs_json(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            run_add(repo)
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = cli_main(["git", "audit", str(repo), "--operation", "add", "--json"])
+
+            data = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(data), 1)
+            self.assertEqual(data[0]["operation"], "add")
 
     def test_push_plan_blocks_without_upstream(self) -> None:
         with git_repo() as repo:
