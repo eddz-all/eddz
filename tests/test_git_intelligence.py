@@ -9,11 +9,11 @@ from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
-from projectpilot.git.operation_planner import build_add_plan
+from projectpilot.git.operation_planner import build_add_plan, build_commit_operation_plan
 from projectpilot.git.parser import parse_ahead_behind
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report
-from projectpilot.git.safe_executor import run_add
+from projectpilot.git.safe_executor import run_add, run_commit
 
 
 class GitIntelligenceTests(unittest.TestCase):
@@ -170,6 +170,57 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertIn("tests/test_feature.py", staged)
             self.assertNotIn("package-lock.json", staged)
             self.assertNotIn(".projectpilot/reports/report.md", staged)
+
+    def test_commit_plan_blocks_without_staged_files(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+
+            plan = build_commit_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("No staged files", plan.blockers[0])
+
+    def test_commit_plan_uses_staged_files_only(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            (repo / "notes.md").write_text("draft\n", encoding="utf-8")
+            run(["git", "add", "projectpilot/feature.py"], repo)
+
+            plan = build_commit_operation_plan(repo)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.planned_paths, ["projectpilot/feature.py"])
+            self.assertEqual(plan.suggested_message, "Update intelligent Git assistant")
+            self.assertTrue(any("Untracked files" in warning for warning in plan.warnings))
+
+    def test_commit_plan_blocks_staged_excluded_files(self) -> None:
+        with git_repo() as repo:
+            (repo / ".projectpilot" / "reports").mkdir(parents=True)
+            (repo / ".projectpilot" / "reports" / "report.md").write_text("generated\n", encoding="utf-8")
+            run(["git", "add", ".projectpilot/reports/report.md"], repo)
+
+            plan = build_commit_operation_plan(repo)
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("Excluded-category files are staged", "; ".join(plan.blockers))
+
+    def test_commit_apply_creates_commit(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            run(["git", "add", "projectpilot/feature.py"], repo)
+            before_commit = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+
+            result = run_commit(repo, message="Add demo feature")
+            after_commit = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+            status = inspect_repository(repo)
+
+            self.assertTrue(result.success)
+            self.assertNotEqual(before_commit, after_commit)
+            self.assertTrue(status.is_clean)
+            self.assertIn("Add demo feature", run(["git", "log", "-1", "--pretty=%s"], repo).stdout)
 
 
 class git_repo:

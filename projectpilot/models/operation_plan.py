@@ -14,6 +14,7 @@ class OperationPlan:
     requires_apply: bool
     command: list[str] = field(default_factory=list)
     reason: str = ""
+    suggested_message: str | None = None
     blockers: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     planned_paths: list[str] = field(default_factory=list)

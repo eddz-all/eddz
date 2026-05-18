@@ -9,10 +9,10 @@ from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import inspect_repository
-from projectpilot.git.operation_planner import build_add_plan
+from projectpilot.git.operation_planner import build_add_plan, build_commit_operation_plan
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report, save_markdown_report
-from projectpilot.git.safe_executor import run_add
+from projectpilot.git.safe_executor import run_add, run_commit
 from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
 from projectpilot.models.git_status import GitStatus
 from projectpilot.models.operation_plan import OperationPlan, OperationResult
@@ -133,6 +133,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_command.add_argument("--apply", action="store_true", help="Actually run git add.")
     add_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     add_command.set_defaults(handler=handle_git_add)
+
+    commit_command = git_subparsers.add_parser(
+        "commit",
+        help="Create a commit from staged files through a ProjectPilot plan.",
+    )
+    add_path_argument(commit_command)
+    commit_command.add_argument("-m", "--message", help="Commit message. Defaults to ProjectPilot's suggestion.")
+    commit_command.add_argument("--apply", action="store_true", help="Actually run git commit.")
+    commit_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    commit_command.set_defaults(handler=handle_git_commit)
 
     return parser
 
@@ -308,6 +318,28 @@ def handle_git_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_commit(args: argparse.Namespace) -> int:
+    if not args.apply:
+        plan = build_commit_operation_plan(Path(args.path), message=args.message)
+        if args.json:
+            print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+            return 0
+
+        print_operation_plan(plan)
+        print()
+        print("Dry run only. Run again with --apply to execute.")
+        return 0
+
+    result = run_commit(Path(args.path), message=args.message)
+
+    if args.json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_operation_result(result)
+    return 0
+
+
 def print_status(status: GitStatus, analysis) -> None:
     print(f"Repository: {status.repo_path}")
     print(f"Branch: {status.branch or '(detached HEAD)'}")
@@ -360,6 +392,8 @@ def print_operation_plan(plan: OperationPlan) -> None:
     print(f"Allowed: {'yes' if plan.allowed else 'no'}")
     print(f"Requires --apply: {'yes' if plan.requires_apply else 'no'}")
     print(f"Reason: {plan.reason}")
+    if plan.suggested_message:
+        print(f"Suggested message: {plan.suggested_message}")
     print()
     print_file_group("Planned paths", plan.planned_paths)
     print_file_group("Review paths", plan.review_paths)
