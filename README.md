@@ -1,0 +1,35 @@
+# ProjectPilot
+
+ProjectPilot is starting as an intelligent Git assistant.
+
+The first MVP focuses on local Git repositories:
+
+- collect structured Git status;
+- explain the current repository state;
+- suggest safe next steps;
+- generate Markdown Git status reports;
+- avoid executing high-risk Git operations.
+
+## Usage
+
+Run from this workspace with:
+
+```bash
+python3 -m projectpilot git status /path/to/repo
+python3 -m projectpilot git explain /path/to/repo
+python3 -m projectpilot git suggest /path/to/repo
+python3 -m projectpilot git report /path/to/repo
+python3 -m projectpilot git diff /path/to/repo --stat
+python3 -m projectpilot git log /path/to/repo -n 5
+python3 -m projectpilot git fetch /path/to/repo
+```
+
+After installation, the same commands are available through:
+
+```bash
+projectpilot git status
+```
+
+## Current Scope
+
+This version is conservative by design. It can run `fetch`, which updates remote refs but does not modify working tree files. It does not run `pull`, `push`, `commit`, `reset`, `clean`, or other higher-risk Git operations.

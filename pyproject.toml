@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "projectpilot"
+version = "0.1.0"
+description = "An intelligent Git assistant for understanding repository state and suggesting safe next steps."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "ProjectPilot" }
+]
+dependencies = []
+
+[project.scripts]
+projectpilot = "projectpilot.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["projectpilot*"]
