@@ -119,13 +119,19 @@ Open the local Agent app:
 projectpilot agent app
 ```
 
-On macOS, you can also open:
+Open the native macOS window:
 
-```text
-macos/ProjectPilot Agent.app
+```bash
+./script/build_and_run.sh
 ```
 
-The app opens a local browser panel for saving connection settings, running one poll, and starting or stopping the read-only agent loop.
+After the first build, the native bundle is available at:
+
+```text
+dist/ProjectPilot Agent Native.app
+```
+
+The native app opens a SwiftUI window for saving connection settings, choosing the allowed root folder, running one poll, and starting or stopping the read-only agent loop. The browser app remains available through `projectpilot agent app` as a lightweight fallback.
 
 For polling-mode integration, configure this machine once:
 
