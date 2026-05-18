@@ -12,6 +12,7 @@ from projectpilot.cli import main as cli_main
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import audit_log_path, read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
+from projectpilot.git.doctor import build_doctor_report
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
 from projectpilot.git.operation_planner import (
@@ -425,6 +426,85 @@ class GitIntelligenceTests(unittest.TestCase):
 
             self.assertFalse(plan.allowed)
             self.assertIn("diverged", "; ".join(plan.blockers))
+
+    def test_doctor_reports_healthy_repository(self) -> None:
+        with remote_git_repo() as repo:
+            report = build_doctor_report(repo)
+
+            self.assertEqual(report.health, "healthy")
+            self.assertEqual(report.risk, "low")
+            self.assertTrue(report.is_clean)
+            self.assertFalse(report.can_add)
+            self.assertFalse(report.can_commit)
+            self.assertFalse(report.can_push)
+            self.assertFalse(report.can_pull)
+            self.assertEqual(report.recommended_next_step, "No Git action needed right now.")
+
+    def test_doctor_reports_attention_without_upstream(self) -> None:
+        with git_repo() as repo:
+            report = build_doctor_report(repo)
+
+            self.assertEqual(report.health, "attention")
+            self.assertEqual(report.risk, "medium")
+            self.assertTrue(any("upstream" in finding for finding in report.findings))
+            self.assertIn("Configure a remote", report.recommended_next_step)
+
+    def test_doctor_reports_attention_for_dirty_worktree(self) -> None:
+        with git_repo() as repo:
+            (repo / "tracked.txt").write_text("changed\n", encoding="utf-8")
+
+            report = build_doctor_report(repo)
+
+            self.assertEqual(report.health, "attention")
+            self.assertFalse(report.is_clean)
+            self.assertTrue(report.can_add)
+            self.assertIn("commit-plan", report.recommended_next_step)
+
+    def test_doctor_reports_blocked_for_diverged_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_local_commit(repo, "local.txt", "local\n", "local commit")
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+
+            report = build_doctor_report(repo)
+
+            self.assertEqual(report.health, "blocked")
+            self.assertTrue(any("diverged" in finding for finding in report.findings))
+            self.assertIn("resolve divergence", report.recommended_next_step)
+
+    def test_doctor_reports_blocked_for_dirty_behind_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+            (repo / "tracked.txt").write_text("local draft\n", encoding="utf-8")
+
+            report = build_doctor_report(repo)
+
+            self.assertEqual(report.health, "blocked")
+            self.assertFalse(report.can_pull)
+            self.assertIn("commit-plan", report.recommended_next_step)
+
+    def test_doctor_includes_recent_audit_operation(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            run_add(repo)
+
+            report = build_doctor_report(repo)
+
+            self.assertEqual(report.last_audit_operation, "add")
+            self.assertTrue(any("Recent ProjectPilot operation: add success" in finding for finding in report.findings))
+
+    def test_doctor_cli_outputs_json(self) -> None:
+        with git_repo() as repo:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = cli_main(["git", "doctor", str(repo), "--json"])
+
+            data = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(data["health"], "attention")
+            self.assertEqual(data["branch"], "main")
 
 
 class git_repo:

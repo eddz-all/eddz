@@ -8,6 +8,7 @@ from pathlib import Path
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
+from projectpilot.git.doctor import build_doctor_report
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import inspect_repository
 from projectpilot.git.operation_planner import (
@@ -21,6 +22,7 @@ from projectpilot.git.reporter import render_markdown_report, save_markdown_repo
 from projectpilot.git.safe_executor import run_add, run_commit, run_pull, run_push
 from projectpilot.models.audit_log import AuditEntry
 from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
+from projectpilot.models.doctor import DoctorReport
 from projectpilot.models.git_status import GitStatus
 from projectpilot.models.operation_plan import OperationPlan, OperationResult
 
@@ -182,6 +184,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     audit_command.set_defaults(handler=handle_git_audit)
+
+    doctor_command = git_subparsers.add_parser(
+        "doctor",
+        help="Check repository Git health and recommend the next step.",
+    )
+    add_path_argument(doctor_command)
+    doctor_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    doctor_command.set_defaults(handler=handle_git_doctor)
 
     return parser
 
@@ -434,6 +444,17 @@ def handle_git_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_doctor(args: argparse.Namespace) -> int:
+    report = build_doctor_report(Path(args.path))
+
+    if args.json:
+        print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_doctor_report(report)
+    return 0
+
+
 def print_status(status: GitStatus, analysis) -> None:
     print(f"Repository: {status.repo_path}")
     print(f"Branch: {status.branch or '(detached HEAD)'}")
@@ -549,6 +570,30 @@ def short_commit(commit: str | None) -> str:
 
 def format_bool(value: bool) -> str:
     return "yes" if value else "no"
+
+
+def print_doctor_report(report: DoctorReport) -> None:
+    print("Git Doctor")
+    print()
+    print(f"Health: {report.health}")
+    print(f"Risk: {report.risk}")
+    print(f"Branch: {report.branch or '(detached HEAD)'}")
+    print(f"Upstream: {report.upstream or 'not configured'}")
+    print(f"Working tree: {'clean' if report.is_clean else 'dirty'}")
+    print(f"Ahead/Behind: +{report.ahead} / -{report.behind}")
+    print()
+    print("Findings:")
+    for finding in report.findings:
+        print(f"- {finding}")
+    print()
+    print("Operation readiness:")
+    print(f"- add: {'allowed' if report.can_add else 'blocked'}")
+    print(f"- commit: {'allowed' if report.can_commit else 'blocked'}")
+    print(f"- push: {'allowed' if report.can_push else 'blocked'}")
+    print(f"- pull: {'allowed' if report.can_pull else 'blocked'}")
+    print()
+    print("Recommended next step:")
+    print(f"- {report.recommended_next_step}")
 
 
 def print_plan_group(title: str, items: list[CommitPlanItem]) -> None:

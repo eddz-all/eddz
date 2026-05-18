@@ -33,6 +33,7 @@ python3 -m projectpilot git push /path/to/repo --apply
 python3 -m projectpilot git pull /path/to/repo
 python3 -m projectpilot git pull /path/to/repo --apply
 python3 -m projectpilot git audit /path/to/repo
+python3 -m projectpilot git doctor /path/to/repo
 ```
 
 After installation, the same commands are available through:
@@ -56,3 +57,5 @@ This version is conservative by design. It can run `fetch`, which updates remote
 `git pull` is dry-run unless `--apply` is present. It only runs `git pull --ff-only` when the working tree is clean, the branch has an upstream, and the local branch is behind but not ahead or diverged.
 
 Every `--apply` operation writes a JSONL audit entry to `.projectpilot/audit/git-operations.jsonl`. Use `git audit` to inspect recent ProjectPilot Git operations.
+
+`git doctor` summarizes repository health, findings, operation readiness, recent audit activity, and the next recommended Git step.
