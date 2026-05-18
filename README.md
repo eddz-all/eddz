@@ -22,6 +22,7 @@ python3 -m projectpilot git report /path/to/repo
 python3 -m projectpilot git diff /path/to/repo --stat
 python3 -m projectpilot git log /path/to/repo -n 5
 python3 -m projectpilot git fetch /path/to/repo
+python3 -m projectpilot git commit-plan /path/to/repo
 ```
 
 After installation, the same commands are available through:
@@ -33,3 +34,5 @@ projectpilot git status
 ## Current Scope
 
 This version is conservative by design. It can run `fetch`, which updates remote refs but does not modify working tree files. It does not run `pull`, `push`, `commit`, `reset`, `clean`, or other higher-risk Git operations.
+
+`commit-plan` is still read-only. It reviews current local changes, groups files into suggested include / review / exclude buckets, and drafts a commit message plus command sequence for the user to inspect.

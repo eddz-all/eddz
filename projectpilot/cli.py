@@ -6,10 +6,12 @@ import sys
 from pathlib import Path
 
 from projectpilot.git.analyzer import analyze_status
+from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import inspect_repository
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report, save_markdown_report
+from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
 from projectpilot.models.git_status import GitStatus
 
 
@@ -79,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_command.add_argument("--prune", action="store_true", help="Prune deleted remote-tracking branches.")
     fetch_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     fetch_command.set_defaults(handler=handle_git_fetch)
+
+    commit_plan_command = git_subparsers.add_parser(
+        "commit-plan",
+        help="Analyze local changes and draft a safe commit plan.",
+    )
+    add_path_argument(commit_plan_command)
+    commit_plan_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    commit_plan_command.set_defaults(handler=handle_git_commit_plan)
 
     return parser
 
@@ -198,6 +208,17 @@ def handle_git_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_commit_plan(args: argparse.Namespace) -> int:
+    plan = build_commit_plan(Path(args.path))
+
+    if args.json:
+        print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_commit_plan(plan)
+    return 0
+
+
 def print_status(status: GitStatus, analysis) -> None:
     print(f"Repository: {status.repo_path}")
     print(f"Branch: {status.branch or '(detached HEAD)'}")
@@ -218,6 +239,39 @@ def print_file_group(title: str, files: list[str]) -> None:
     print(f"{title}: {len(files)}")
     for path in files:
         print(f"  - {path}")
+
+
+def print_commit_plan(plan: CommitPlan) -> None:
+    print(f"Repository: {plan.repo_path}")
+    print(f"Branch: {plan.branch or '(detached HEAD)'}")
+    print(plan.summary)
+    if plan.suggested_message:
+        print(f"Suggested commit message: {plan.suggested_message}")
+    print()
+
+    print_plan_group("Suggested include", plan.include)
+    print_plan_group("Needs review", plan.review)
+    print_plan_group("Suggested exclude", plan.exclude)
+
+    if plan.warnings:
+        print("Warnings:")
+        for warning in plan.warnings:
+            print(f"  - {warning}")
+        print()
+
+    print("Suggested commands:")
+    for command in plan.suggested_commands:
+        print(f"  {command}")
+
+
+def print_plan_group(title: str, items: list[CommitPlanItem]) -> None:
+    print(f"{title}: {len(items)}")
+    if not items:
+        print("  - None")
+        return
+    for item in items:
+        print(f"  - {item.path} ({item.status})")
+        print(f"    {item.reason}")
 
 
 def print_suggestions(status: GitStatus, analysis, recommendations) -> None:

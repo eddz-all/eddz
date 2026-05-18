@@ -13,7 +13,7 @@ class NotGitRepositoryError(RuntimeError):
 
 def inspect_repository(path: Path) -> GitStatus:
     repo_path = find_repo_root(path)
-    porcelain = run_git(["status", "--porcelain=v2", "--branch"], cwd=repo_path).stdout
+    porcelain = run_git(["status", "--porcelain=v2", "--branch", "--untracked-files=all"], cwd=repo_path).stdout
     branch = parse_branch_status(porcelain)
     changed_files, untracked_files, conflicted_files = parse_status_entries(porcelain)
     remotes = parse_remotes(run_git(["remote", "-v"], cwd=repo_path, check=False).stdout)

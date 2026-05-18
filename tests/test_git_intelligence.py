@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from projectpilot.git.analyzer import analyze_status
+from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
 from projectpilot.git.parser import parse_ahead_behind
@@ -98,6 +99,36 @@ class GitIntelligenceTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
             self.assertIn("origin", status.remotes)
+
+    def test_commit_plan_for_clean_repo(self) -> None:
+        with git_repo() as repo:
+            plan = build_commit_plan(repo)
+
+            self.assertEqual(plan.summary, "No local changes found.")
+            self.assertIsNone(plan.suggested_message)
+            self.assertIn("There are no local changes", plan.warnings[0])
+
+    def test_commit_plan_classifies_changes(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            (repo / "tests" / "test_feature.py").parent.mkdir()
+            (repo / "tests" / "test_feature.py").write_text("def test_ok(): pass\n", encoding="utf-8")
+            (repo / ".projectpilot" / "reports").mkdir(parents=True)
+            (repo / ".projectpilot" / "reports" / "report.md").write_text("generated\n", encoding="utf-8")
+            (repo / "package-lock.json").write_text("{}\n", encoding="utf-8")
+
+            plan = build_commit_plan(repo)
+
+            include_paths = {item.path for item in plan.include}
+            review_paths = {item.path for item in plan.review}
+            exclude_paths = {item.path for item in plan.exclude}
+
+            self.assertIn("projectpilot/feature.py", include_paths)
+            self.assertIn("tests/test_feature.py", include_paths)
+            self.assertIn("package-lock.json", review_paths)
+            self.assertIn(".projectpilot/reports/report.md", exclude_paths)
+            self.assertEqual(plan.suggested_message, "Update intelligent Git assistant")
 
 
 class git_repo:
