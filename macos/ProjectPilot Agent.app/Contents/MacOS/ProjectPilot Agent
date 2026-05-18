@@ -1,0 +1,12 @@
+#!/bin/zsh
+set -e
+
+SCRIPT_DIR="${0:A:h}"
+REPO_ROOT="${SCRIPT_DIR}/../../../.."
+cd "${REPO_ROOT}"
+
+if command -v projectpilot >/dev/null 2>&1; then
+  exec projectpilot agent app
+fi
+
+exec python3 -m projectpilot agent app

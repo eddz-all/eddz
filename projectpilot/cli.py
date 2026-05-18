@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from projectpilot import __version__
+from projectpilot.agent.app import run_agent_app
 from projectpilot.agent.client import poll_and_run_once, run_connect_loop
 from projectpilot.agent.config import build_config, default_config_path, load_config, save_config
 from projectpilot.git.analyzer import analyze_status
@@ -244,6 +245,17 @@ def build_parser() -> argparse.ArgumentParser:
     connect_command.add_argument("--once", action="store_true", help="Poll and process at most one task.")
     connect_command.add_argument("--json", action="store_true", help="Print machine-readable JSON for --once.")
     connect_command.set_defaults(handler=handle_agent_connect)
+
+    app_command = agent_subparsers.add_parser(
+        "app",
+        help="Open the local ProjectPilot Agent app.",
+        description="Open the local ProjectPilot Agent app.",
+    )
+    add_agent_config_argument(app_command)
+    app_command.add_argument("--host", default="127.0.0.1", help="Local app host.")
+    app_command.add_argument("--port", type=int, default=8765, help="Local app port.")
+    app_command.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically.")
+    app_command.set_defaults(handler=handle_agent_app)
 
     return parser
 
@@ -615,6 +627,16 @@ def handle_agent_connect(args: argparse.Namespace) -> int:
         return 0
 
     run_connect_loop(config, once=args.once, timeout=args.timeout)
+    return 0
+
+
+def handle_agent_app(args: argparse.Namespace) -> int:
+    run_agent_app(
+        host=args.host,
+        port=args.port,
+        config_path=args.config,
+        open_browser=not args.no_browser,
+    )
     return 0
 
 

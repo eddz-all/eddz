@@ -113,6 +113,20 @@ Both functions return structured `dict` data. They do not write to the database 
 
 ## Agent Connection Helper
 
+Open the local Agent app:
+
+```bash
+projectpilot agent app
+```
+
+On macOS, you can also open:
+
+```text
+macos/ProjectPilot Agent.app
+```
+
+The app opens a local browser panel for saving connection settings, running one poll, and starting or stopping the read-only agent loop.
+
 For polling-mode integration, configure this machine once:
 
 ```bash
