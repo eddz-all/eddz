@@ -97,3 +97,16 @@ projectpilot git doctor . --json
 projectpilot git audit . --json
 projectpilot git commit-plan . --json
 ```
+
+## Backend Integration
+
+Member B integration functions are available without using the CLI:
+
+```python
+from projectpilot.integration.member_b import detect_local_environment, detect_local_git_status
+
+git_status = detect_local_git_status("/path/to/project")
+environment = detect_local_environment("/path/to/project")
+```
+
+Both functions return structured `dict` data. They do not write to the database or call backend APIs. The backend can store successful results as `GitStatus` and `EnvironmentSnapshot`, and can handle failures through the shared `success`, `error_type`, and `message` fields.
