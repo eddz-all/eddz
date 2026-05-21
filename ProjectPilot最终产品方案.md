@@ -401,17 +401,35 @@ ProjectPilot
 
 ## 5.2 Git 智能管理
 
+最终 Git 能力要覆盖 Git 的完整能力面，而不是只覆盖 `pull / push / commit`。
+
+覆盖的意思是：
+
+```text
+AI 能识别这个 Git 功能属于什么场景；
+AI 能读取相关状态；
+AI 能解释风险；
+AI 能生成计划；
+AI 能在允许的情况下预演；
+AI 能在用户批准后执行；
+AI 能记录历史；
+AI 能在可回滚时生成回滚入口。
+```
+
 最终 Git 能力包括：
 
 - 本地 Git 检测；
 - 远程 Git 检测；
+- init / clone / remote / config 管理；
 - branch / upstream / remote 检测；
 - ahead / behind / diverged 判断；
 - 分支关系图分析；
 - 分支合并可行性分析；
 - merge base / changed files / conflict risk 分析；
 - dirty 文件分类；
+- add / restore / reset 工作区管理；
 - commit plan；
+- tag / release 标记管理；
 - safe add；
 - safe commit；
 - safe pull；
@@ -420,6 +438,15 @@ ProjectPilot
 - merge plan；
 - rebase plan；
 - cherry-pick plan；
+- revert plan；
+- stash plan；
+- worktree 管理；
+- submodule 管理；
+- LFS 状态检测；
+- reflog / recovery 辅助；
+- bisect 辅助定位；
+- blame / grep / show 辅助分析；
+- archive / bundle 辅助导出；
 - Git 操作审计；
 - 冲突解释；
 - 冲突解决建议；
@@ -427,7 +454,14 @@ ProjectPilot
 - PR / MR 摘要生成；
 - 部署前 Git 检查。
 
-智能 Git 的目标不是把几个 Git 命令包一层按钮，而是让 AI 参与完整分支协作流程。
+智能 Git 的目标不是把几个 Git 命令包一层按钮，而是让 AI 参与完整 Git 生命周期：
+
+```text
+建仓 -> 克隆 -> 配置远程 -> 分支开发 -> 暂存 -> 提交 -> 同步
+-> 合并 -> 解决冲突 -> 打 tag -> 发布 -> 回滚 -> 恢复
+```
+
+尤其是分支协作流程。
 
 用户可以问：
 
@@ -538,6 +572,10 @@ git diff
 git fetch
 git branch
 git merge-base
+git show
+git blame
+git grep
+git reflog
 ```
 
 允许在条件满足时执行：
@@ -550,6 +588,10 @@ git commit
 git switch
 git switch -c
 git merge --ff-only
+git stash push
+git stash pop
+git revert --no-commit
+git tag
 ```
 
 允许强确认后执行：
@@ -559,6 +601,9 @@ git merge
 git rebase 私有分支
 git cherry-pick
 AI 写入冲突解决 patch
+git worktree add / remove
+git submodule update
+git remote set-url
 ```
 
 默认禁止：
@@ -569,6 +614,8 @@ git clean -fd
 git push --force
 git rebase 公共分支
 删除受保护分支
+删除远程分支
+重写已共享 tag
 ```
 
 ProjectPilot 对复杂 Git 操作的原则是：AI 可以分析、预演、生成计划和建议解决方案，但真实改变仓库历史或写入冲突文件前，必须获得用户批准。
@@ -657,7 +704,168 @@ AI 输出：
 
 用户确认后才执行中高风险步骤。
 
-## 5.5 AI 对话式运维
+## 5.5 Docker 智能管理
+
+Docker 也要覆盖完整能力面。
+
+覆盖的意思同样不是让 AI 随便执行所有 Docker 命令，而是：
+
+```text
+AI 能识别 Docker / Compose / 镜像 / 容器 / 网络 / 卷 / registry 的状态；
+AI 能解释运行失败原因；
+AI 能生成修复计划；
+AI 能在安全范围内执行只读检测；
+AI 能在用户批准后执行变更操作；
+AI 能记录容器、镜像、卷、网络的执行前后状态；
+AI 能对危险操作要求强确认或禁止默认执行。
+```
+
+最终 Docker 能力包括：
+
+- Docker daemon 状态检测；
+- Docker context 检测；
+- Docker version / info 检测；
+- image 列表、来源、tag、大小、构建历史分析；
+- container 列表、状态、退出码、健康检查分析；
+- container logs 分析；
+- container exec 计划；
+- container restart / stop / start 计划；
+- Dockerfile 分析；
+- `.dockerignore` 分析；
+- image build / tag / push / pull 计划；
+- buildx / multi-arch 构建计划；
+- registry 登录状态检测；
+- Compose 文件检测；
+- Compose service / network / volume 关系分析；
+- compose config 校验；
+- compose up / down / restart / pull / build 计划；
+- network 检测与连接关系分析；
+- volume 检测、备份建议和删除风险分析；
+- resource usage 检测；
+- port binding 冲突检测；
+- env / secret 缺失检测；
+- image cleanup / container cleanup 风险分析；
+- 部署前 Docker 检查；
+- Docker 操作审计。
+
+用户可以问：
+
+```text
+为什么这个容器一直重启？
+这个 compose 项目能不能安全重启？
+这个镜像是不是太旧了？
+这台服务器有哪些没用的镜像和卷？
+我能不能删这些 stopped containers？
+帮我生成 Docker 部署计划。
+帮我检查 Dockerfile 有没有问题。
+```
+
+AI 应该输出：
+
+```text
+目标：修复 dev-server 上 app 容器反复重启
+
+分析：
+1. Docker daemon 正常运行。
+2. app 容器最近 10 分钟重启 6 次。
+3. 退出码为 1。
+4. 日志显示缺少 DATABASE_URL。
+5. compose.yaml 中 app service 依赖 postgres，但 .env 未配置数据库地址。
+6. 不建议直接 docker compose down，因为可能影响正在运行的 postgres volume。
+
+建议计划：
+1. docker compose ps
+2. docker compose logs --tail=200 app
+3. 检查 .env 是否存在 DATABASE_URL
+4. 用户补充或批准写入 .env
+5. docker compose up -d app
+6. 检查 app health status
+
+需要用户批准：
+- 是否允许读取容器日志
+- 是否允许修改 .env
+- 是否允许重启 app service
+```
+
+### Docker 能力分层
+
+只读分析能力：
+
+```text
+docker version
+docker info
+docker context ls
+docker ps
+docker images
+docker inspect
+docker logs --tail
+docker stats --no-stream
+docker network ls / inspect
+docker volume ls / inspect
+docker compose config
+docker compose ps
+docker compose logs --tail
+```
+
+这些能力用于让 AI 理解 Docker 运行状态、服务拓扑、日志和资源占用。
+
+可审批执行能力：
+
+```text
+docker pull
+docker build
+docker tag
+docker start
+docker stop
+docker restart
+docker compose pull
+docker compose build
+docker compose up -d service
+docker compose restart service
+docker exec 低风险诊断命令
+```
+
+这些操作会改变容器或镜像状态，必须生成计划并得到用户确认。
+
+强确认能力：
+
+```text
+docker compose down
+docker rm
+docker rmi
+docker volume rm
+docker network rm
+docker system prune
+docker image prune
+docker builder prune
+docker push
+docker exec 会修改容器状态的命令
+```
+
+这些操作必须展示影响范围：
+
+- 哪些容器会停止；
+- 哪些镜像会删除；
+- 哪些 volume 可能丢数据；
+- 哪些端口会变化；
+- 哪些服务会短暂不可用；
+- 是否影响生产环境；
+- 是否有备份或回滚方式。
+
+默认禁止能力：
+
+```text
+docker system prune -a --volumes
+删除未备份的数据卷
+在生产容器中执行未知脚本
+以 privileged 模式运行未知镜像
+挂载宿主机敏感目录
+覆盖生产 registry tag
+```
+
+ProjectPilot 对 Docker 的原则是：AI 可以做诊断、生成部署和修复计划，但任何可能停止服务、删除镜像/容器/卷、修改生产容器或覆盖镜像 tag 的操作，都必须经过用户批准。
+
+## 5.6 AI 对话式运维
 
 最终用户可以直接问：
 
@@ -696,7 +904,7 @@ AI 继续说明：
 已同步到最新提交。现在 dev-server 与 origin/main 一致。
 ```
 
-## 5.6 审计和历史
+## 5.7 审计和历史
 
 所有操作都入库。
 
@@ -725,7 +933,7 @@ eddz 确认执行 dev-server git pull --ff-only
 提交：abc123 -> def456
 ```
 
-## 5.7 AI 计划审批与回滚中心
+## 5.8 AI 计划审批与回滚中心
 
 最终产品需要一个专门的计划审批界面。
 
@@ -766,7 +974,7 @@ ApprovedExecutionPlan
 
 Agent 只能执行这个已批准计划，不能临时扩展命令。
 
-### 5.7.1 执行时的保护机制
+### 5.8.1 执行时的保护机制
 
 执行时必须满足：
 
@@ -779,7 +987,7 @@ Agent 只能执行这个已批准计划，不能临时扩展命令。
 - Agent 执行结果逐步上传；
 - 失败后停止后续高风险步骤。
 
-### 5.7.2 回滚入口
+### 5.8.2 回滚入口
 
 执行历史页要显示：
 
@@ -1238,6 +1446,40 @@ AI 生成解释和解决建议
 用户批准真实执行或放弃
 ```
 
+### 8.7 AI 辅助 Docker 运维
+
+```text
+用户提出 Docker 目标：
+  修复容器
+  更新镜像
+  重启服务
+  清理资源
+  检查 Compose 部署
+  ↓
+AI 读取 DockerSnapshot / ComposeConfig / OperationLog
+  ↓
+AI 判断：
+    daemon 是否正常
+    容器是否 unhealthy / restarting / exited
+    镜像是否过旧
+    日志是否有明确错误
+    volume 是否可能包含持久化数据
+    network / port 是否冲突
+    操作是否影响生产服务
+  ↓
+AI 生成 DockerPlan
+  ↓
+后端标记风险等级
+  ↓
+用户批准只读诊断或变更执行
+  ↓
+Agent 通过本机或 SSH 执行 Docker / Compose 命令
+  ↓
+执行前后保存 DockerSnapshot
+  ↓
+AI 总结结果，并在可回滚时生成回滚计划
+```
+
 ## 9. 最终技术选型
 
 ### 9.1 后端
@@ -1261,6 +1503,9 @@ WebSocket / SSE 用于实时状态
 - 审批模块；
 - 回滚模块；
 - GitStatus 模块；
+- GitPlan 模块；
+- DockerStatus 模块；
+- DockerPlan 模块；
 - EnvironmentSnapshot 模块；
 - OperationLog 模块；
 - AI 分析模块；
@@ -1405,8 +1650,11 @@ projectpilot execution rollback exec_18
 - git fetch；
 - git pull --ff-only；
 - git push safe；
+- Git 全功能状态识别；
 - branch / merge-base / 分支差异分析；
 - 分支分叉解释；
+- Docker daemon / image / container / compose 只读检测；
+- Docker 基础故障解释；
 - AI 计划审批；
 - 用户编辑计划；
 - 远程操作审计；
@@ -1418,7 +1666,7 @@ projectpilot execution rollback exec_18
 - TUI 计划审批与编辑；
 - TUI 执行历史查看。
 
-此阶段可以让 AI 解释分支关系和合并风险，但真实 `merge / rebase / cherry-pick` 仍只生成计划，不默认执行。
+此阶段可以让 AI 解释 Git 分支关系、合并风险和 Docker 运行状态，但真实 `merge / rebase / cherry-pick`、容器重启、镜像构建和 Compose 变更仍只生成计划，不默认执行。
 
 ## V3：环境配置版
 
@@ -1433,6 +1681,11 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - Node / Python / Docker 检测；
 - 依赖安装建议；
 - Docker Compose 检查；
+- Dockerfile / compose.yaml 分析；
+- container logs 分析；
+- image build / pull 计划；
+- compose up / restart service 计划；
+- Docker network / volume 风险分析；
 - 配置文件缺失检查；
 - 环境修复计划；
 - 中风险步骤确认执行；
@@ -1450,6 +1703,15 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 冲突文件解释；
 - AI 冲突解决建议；
 - 用户批准后应用冲突解决 patch。
+
+同时补齐 Docker 复杂运维能力：
+
+- Docker 部署计划；
+- Docker 容器修复计划；
+- Docker 镜像构建计划；
+- Docker Compose 服务更新计划；
+- Docker volume 备份和清理建议；
+- 用户批准后执行中风险 Docker 操作。
 
 ## V4：团队协作版
 
@@ -1472,7 +1734,10 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 团队审批视图；
 - PR / MR 摘要生成；
 - 团队合并审批；
-- 受保护分支策略。
+- 受保护分支策略；
+- 团队 Docker 操作审批；
+- 生产容器变更审批；
+- 镜像 registry 权限策略。
 
 ## V5：生产平台版
 
@@ -1486,6 +1751,8 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 
 - CI/CD 集成；
 - GitHub / GitLab 集成；
+- Git 全功能 AI 控制台；
+- Docker 全功能 AI 控制台；
 - 监控集成；
 - 告警；
 - 自动健康巡检；
@@ -1500,11 +1767,12 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 ProjectPilot 应该做：
 
 - 帮用户看清项目状态；
-- 帮用户理解 Git 和服务器环境问题；
+- 帮用户理解 Git、Docker 和服务器环境问题；
 - 帮用户生成安全操作计划；
 - 帮用户执行被允许、被确认的计划版本；
 - 支持用户修改 AI 计划后再执行；
 - 提供 Web / GUI / CLI / TUI 多入口，且共享同一套后端权限和审计；
+- 覆盖 Git 和 Docker 的完整能力面，但按风险分层执行；
 - 保存执行前后快照；
 - 为可回滚操作提供回滚入口；
 - 帮团队追踪所有历史。
@@ -1519,6 +1787,8 @@ ProjectPilot 不应该做：
 - 声称所有操作都能完整回滚；
 - 未经批准替用户自动解决复杂冲突；
 - 未经批准改写公共 Git 历史；
+- 未经批准停止、删除或重建 Docker 生产容器；
+- 未经批准删除 Docker volume 或执行 prune；
 - 让 AI 无限制运行 shell；
 - 删除或覆盖用户代码。
 
@@ -1555,5 +1825,5 @@ CLI 负责脚本化自动化
 一句话终局：
 
 ```text
-ProjectPilot = AI 大脑 + 项目数据库 + 桌面 Agent + Rust TUI + SSH 执行器 + Git/环境安全控制台。
+ProjectPilot = AI 大脑 + 项目数据库 + 桌面 Agent + Rust TUI + SSH 执行器 + Git/Docker/环境安全控制台。
 ```
