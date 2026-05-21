@@ -14,7 +14,7 @@
 
 ```text
 Executor 怎么读取 SSH config？
-Central Executor 和 Local Agent Executor 怎么选？
+Central Executor 和 Local Executor 怎么选？
 主机后端、AI、数据库、Executor 分别做什么？
 哪些命令可以执行，哪些必须审批？
 执行结果怎么入库、审计和回滚？
@@ -77,13 +77,11 @@ Central Executor
   读取主机上的 SSH config 或托管 SSH Host 配置。
   作为服务器集中管理的主模式。
 
-Local Agent Executor
+Local Executor
   部署在用户本机或内网机器。
   读取本机 ~/.ssh/config 和 ssh-agent。
   作为私钥不出本机、主机不能直连内网时的补充模式。
 ```
-
-因此，旧文档中提到的 “本机 App / Agent” 应理解为 Local Agent Executor；最终产品还需要支持 Central Executor。
 
 ## 2. 关键原则
 
@@ -160,9 +158,9 @@ Executor 负责：
 | 模式 | 部署位置 | SSH 配置来源 | 适合场景 |
 | --- | --- | --- | --- |
 | Central Executor | 主机后端所在机器 | 主机 `~/.ssh/config` 或后端托管 Host 配置 | 主机能直连所有服务器，追求速度和集中管理 |
-| Local Agent Executor | 用户本机或内网机器 | 本机 `~/.ssh/config`、ssh-agent、Keychain | 私钥不出本机，或主机不能直连内网服务器 |
+| Local Executor | 用户本机或内网机器 | 本机 `~/.ssh/config`、ssh-agent、Keychain | 私钥不出本机，或主机不能直连内网服务器 |
 
-最终默认主模式是 Central Executor；Local Agent Executor 是补充模式。
+最终默认主模式是 Central Executor；Local Executor 是补充模式。
 
 ## 3. 总体架构
 
@@ -181,7 +179,7 @@ Executor 负责：
           ▼
 ┌────────────────────┐
 │   Executor 执行器    │
-│ Central / Local Agent│
+│ Central / Local│
 └─────────┬──────────┘
           │ ssh
           ▼
@@ -202,15 +200,15 @@ Central Executor
   部署在主机后端所在机器。
   适合集中控制多台服务器。
 
-Local Agent Executor
+Local Executor
   部署在用户本机或内网机器。
   适合复用本机 SSH config，或服务器只在内网可达。
 ```
 
-Local Agent Executor 第一版推荐做成 macOS 原生窗口应用：
+Local Executor 第一版推荐做成 macOS 原生窗口应用：
 
 ```text
-ProjectPilot Agent Native.app
+ProjectPilot Executor.app
 ```
 
 窗口能力：
@@ -222,7 +220,7 @@ ProjectPilot Agent Native.app
 - 扫描 `~/.ssh/config`;
 - 展示 SSH Host 列表；
 - 测试连接；
-- 启动 / 停止 Local Agent Executor；
+- 启动 / 停止 Local Executor；
 - 查看最近任务；
 - 查看最近错误。
 
@@ -243,10 +241,10 @@ projectpilot-executor
 
 ### 4.2 Executor 配置
 
-Local Agent Executor 配置文件：
+Local Executor 配置文件：
 
 ```text
-~/.projectpilot/agent.json
+~/.projectpilot/executor.json
 ```
 
 示例：
@@ -275,7 +273,7 @@ Central Executor 可以使用：
 - 文件权限尽量设置为 `0600`;
 - token 不在 UI 明文展示；
 - SSH 私钥不交给 AI Planner；
-- Local Agent Executor 优先走系统 `ssh`、`ssh-agent` 和 Keychain；
+- Local Executor 优先走系统 `ssh`、`ssh-agent` 和 Keychain；
 - Central Executor 可以配置受控密钥路径，但必须限制文件权限和服务器范围。
 
 ## 5. SSH 连接方案
@@ -389,17 +387,17 @@ ssh -o BatchMode=yes -o ConnectTimeout=8 dev-server "echo projectpilot-ok"
 
 ### 6.1 两种取任务方式
 
-Central Executor 和 Local Agent Executor 可以使用不同的取任务方式。
+Central Executor 和 Local Executor 可以使用不同的取任务方式。
 
 ```text
 Central Executor
   可以由后端队列直接派发任务，也可以由 worker 主动拉取任务。
 
-Local Agent Executor
+Local Executor
   推荐使用轮询，避免用户电脑开放公网端口。
 ```
 
-Local Agent Executor 使用轮询的优点：
+Local Executor 使用轮询的优点：
 
 - 用户电脑不用开放公网端口；
 - 不需要后端 SSH 到用户电脑；
@@ -416,15 +414,6 @@ Local Agent Executor 使用轮询的优点：
 POST /executor/poll
 POST /executor/tasks/{task_id}/result
 ```
-
-兼容早期实现时，可以保留：
-
-```text
-POST /agent/poll
-POST /agent/tasks/{task_id}/result
-```
-
-但产品概念上统一叫 Executor。
 
 ### 6.3 Executor 取任务请求
 
@@ -875,8 +864,6 @@ started_at
 finished_at
 ```
 
-早期实现里如果已经叫 `AgentTask`，可以保留数据库字段或兼容视图，但产品概念统一叫 `ExecutorTask`。
-
 ### 10.7 OperationLog
 
 ```text
@@ -1170,13 +1157,13 @@ Docker 已安装但未运行。
 
 ## 15. 阶段计划
 
-### 阶段 1：Local Agent Executor 与本地检测
+### 阶段 1：Local Executor 与本地检测
 
 已完成 / 当前能力：
 
 - 本地 Git 检测；
 - 本地环境检测；
-- Local Agent Executor 轮询；
+- Local Executor 轮询；
 - macOS 原生窗口；
 - 后端 poll/result 协议雏形。
 
@@ -1245,7 +1232,7 @@ macOS Desktop App
   - 扫描 ~/.ssh/config
   - 选择服务器 Host
   - 测试连接
-  - 启动 Local Agent Executor
+  - 启动 Local Executor
 
 后端
   - /executor/poll
@@ -1280,7 +1267,7 @@ Executor = 手，负责 SSH 连接和命令执行
 
 Central Executor 是主模式，用于主机集中管理多台服务器。
 
-Local Agent Executor 是补充模式，用于私钥不出本机、主机无法直连内网服务器的场景。
+Local Executor 是补充模式，用于私钥不出本机、主机无法直连内网服务器的场景。
 
 这样既能实现“主机 AI 统一管理所有服务器”，又不会让 AI Planner 自由读取私钥或无限制执行 shell。
 

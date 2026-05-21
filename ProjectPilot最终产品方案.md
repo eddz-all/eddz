@@ -120,7 +120,7 @@ ProjectPilot 最终由八个逻辑部分组成：
                 ▼
 ┌──────────────────────────────┐
 │          Executor 执行器层      │
-│ Central Exec / Local Agent Exec│
+│ Central Exec / Local Exec     │
 └───────────────┬──────────────┘
                 │ SSH
                 ▼
@@ -150,8 +150,8 @@ Central Executor 模式
   主机后端所在机器保存/加载 SSH config，集中连接多台服务器。
   这是服务器集中管理的主模式，速度快，执行链路短。
 
-Local Agent Executor 模式
-  用户本机或内网机器运行 Local Agent Executor，复用本机 ~/.ssh/config 和 ssh-agent。
+Local Executor 模式
+  用户本机或内网机器运行 Local Executor，复用本机 ~/.ssh/config 和 ssh-agent。
   这是私钥不出本机、主机无法直连内网机器时的补充模式。
 ```
 
@@ -172,7 +172,7 @@ Backend URL:  http://主机后端地址
 Token:        ********
 Executor ID:  eddz-mac-local
 Allowed Root: /Users/eddz/work
-Executor:     Central / Local Agent
+Executor:     Central / Local
 
 [连接主机] [选择执行器模式] [扫描 SSH 配置] [进入控制台]
 ```
@@ -194,11 +194,11 @@ Executor:     Central / Local Agent
 
 如果选择 Central Executor，主机后端所在机器负责保存或加载 SSH config，并集中连接多台服务器。
 
-如果选择 Local Agent Executor，本机执行器作为后台服务运行，负责本机检测、SSH 执行和权限边界。
+如果选择 Local Executor，本机执行器作为后台服务运行，负责本机检测、SSH 执行和权限边界。
 
 ### 3.2 添加远程服务器
 
-桌面 GUI App、Central Executor 设置页或 Local Agent Executor 设置页自动扫描：
+桌面 GUI App、Central Executor 设置页或 Local Executor 设置页自动扫描：
 
 ```text
 ~/.ssh/config
@@ -220,7 +220,7 @@ Executor:     Central / Local Agent
 [测试连接]
 ```
 
-ProjectPilot 使用执行器所在机器的 SSH 配置测试连接。Central Executor 使用主机上的 SSH config；Local Agent Executor 使用用户本机的 SSH config。默认不上传私钥明文。
+ProjectPilot 使用执行器所在机器的 SSH 配置测试连接。Central Executor 使用主机上的 SSH config；Local Executor 使用用户本机的 SSH config。默认不上传私钥明文。
 
 ### 3.3 绑定项目
 
@@ -1820,7 +1820,7 @@ Web 前端：适合团队共享、远程访问、浏览器打开。
 桌面 GUI App：适合个人日常使用、本机通知、Executor 管理。
 ```
 
-桌面 GUI App 可以管理 Central Executor 或 Local Agent Executor，但不能绕过后端审批和审计。
+桌面 GUI App 可以管理 Central Executor 或 Local Executor，但不能绕过后端审批和审计。
 
 ### 6.3 Executor 执行器层
 
@@ -1849,7 +1849,7 @@ Central Executor
   读取主机的 ~/.ssh/config 或后端托管的 SSH Host 配置。
   适合主机可以直连所有服务器的场景。
 
-Local Agent Executor
+Local Executor
   部署在用户本机或内网机器。
   读取本机 ~/.ssh/config、ssh-agent、Keychain。
   适合私钥不出本机、主机不能直连内网服务器的场景。
@@ -1991,7 +1991,7 @@ Central Executor
   权限由后端管理员配置。
   可以统一维护 SSH Host、密钥路径、服务器标签和允许命令。
 
-Local Agent Executor
+Local Executor
   适合本机和内网环境。
   权限由本机用户授权。
   默认复用本机 ~/.ssh/config、ssh-agent 和 allowed-root。
@@ -2269,7 +2269,6 @@ WebSocket / SSE 用于实时状态
 - 项目模块；
 - 服务器模块；
 - Executor 模块；
-- 旧 Agent 兼容模块；
 - 任务模块；
 - AI 计划模块；
 - 审批模块；
@@ -2317,7 +2316,7 @@ Linux: Tauri / AppImage / Flatpak
 
 ```text
 Central Executor: 后端同机进程 / Worker / systemd service
-Local Agent Executor: macOS LaunchAgent / Windows Service / Linux systemd user service
+Local Executor: macOS LaunchAgent / Windows Service / Linux systemd user service
 SSH: OpenSSH + ControlMaster / ControlPersist
 任务队列: Redis / PostgreSQL queue / Celery / RQ
 ```
@@ -2338,9 +2337,9 @@ RollbackPreparer
 
 Central Executor 部署在主机后端侧，是服务器集中管理的主模式。
 
-Local Agent Executor 部署在用户本机或内网机器，是私钥不出本机、主机不能直连内网时的补充模式。
+Local Executor 部署在用户本机或内网机器，是私钥不出本机、主机不能直连内网时的补充模式。
 
-桌面 GUI 主应用可以启动和管理 Local Agent Executor；后端管理界面可以启动和管理 Central Executor。
+桌面 GUI 主应用可以启动和管理 Local Executor；后端管理界面可以启动和管理 Central Executor。
 
 ### 9.4 Rust TUI
 
@@ -2450,7 +2449,7 @@ projectpilot execution rollback exec_18
 
 - macOS 桌面 GUI 主应用；
 - Central Executor；
-- Local Agent Executor；
+- Local Executor；
 - 后端连接；
 - SSH Host 扫描；
 - 连接测试；
