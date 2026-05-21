@@ -49,6 +49,17 @@ projectpilot git commit .
 projectpilot git commit . --apply
 ```
 
+Work with branches and merge flow:
+
+```bash
+projectpilot git switch feature/demo . --create
+projectpilot git switch feature/demo . --create --apply
+projectpilot git merge feature/demo .
+projectpilot git merge feature/demo . --apply
+projectpilot git stash . --include-untracked
+projectpilot git stash . --include-untracked --apply
+```
+
 Sync with upstream when configured:
 
 ```bash
@@ -67,6 +78,16 @@ projectpilot git audit .
 projectpilot git audit . --operation commit
 ```
 
+Release or recovery-oriented operations:
+
+```bash
+projectpilot git tag v1.0.0 . -m "Release v1.0.0"
+projectpilot git tag v1.0.0 . -m "Release v1.0.0" --apply
+projectpilot git revert HEAD .
+projectpilot git cherry-pick abc1234 .
+projectpilot git danger-plan reset-hard .
+```
+
 Generate a report:
 
 ```bash
@@ -79,11 +100,13 @@ ProjectPilot is conservative by design:
 
 - `status`, `explain`, `suggest`, `diff`, `log`, `report`, `commit-plan`, `add-plan`, `doctor`, and `audit` are read-only.
 - `fetch` updates remote refs but does not modify working tree files.
-- `add`, `commit`, `push`, and `pull` are dry-run unless `--apply` is present.
+- `add`, `commit`, `push`, `pull`, `switch`, `merge`, `stash`, `tag`, `revert`, and `cherry-pick` are dry-run unless `--apply` is present.
 - `commit` only commits files that are already staged.
 - `push` only runs a normal `git push` when the branch has an upstream, is ahead, and is not behind or diverged.
 - `pull` only runs `git pull --ff-only` when the working tree is clean and the branch is behind but not ahead or diverged.
-- Force push, reset, clean, and rebase are not supported by controlled execution.
+- `merge` only executes fast-forward merges in this phase.
+- `revert` and `cherry-pick` default to `--no-commit`, so the result can be reviewed before committing.
+- Force push, reset, clean, and rebase are exposed through blocked risk plans, not controlled execution.
 
 Every `--apply` operation writes a JSONL audit entry to `.projectpilot/audit/git-operations.jsonl`. This local audit directory is ignored by Git.
 

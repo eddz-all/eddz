@@ -708,6 +708,16 @@ git rebase 公共分支
 
 ProjectPilot 对复杂 Git 操作的原则是：AI 可以分析、预演、生成计划和建议解决方案，但真实改变仓库历史或写入冲突文件前，必须获得用户批准。
 
+当前本地智能 Git 已完成的核心实现：
+
+- `status / explain / suggest / report / diff / log / fetch`;
+- `commit-plan / add-plan / doctor / audit`;
+- 受控执行 `add / commit / pull --ff-only / push`;
+- 受控执行 `switch / switch -c / merge --ff-only / stash push / tag`;
+- 受控执行 `revert --no-commit / cherry-pick --no-commit`;
+- 高风险 `reset-hard / clean / force-push / rebase` 只生成风险计划，不执行；
+- 所有 `--apply` 操作写入本地 Git 审计记录。
+
 ### 5.3 远程服务器管理
 
 最终服务器能力：

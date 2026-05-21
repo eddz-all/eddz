@@ -20,6 +20,7 @@ class OperationPlan:
     planned_paths: list[str] = field(default_factory=list)
     review_paths: list[str] = field(default_factory=list)
     excluded_paths: list[str] = field(default_factory=list)
+    rollback_commands: list[list[str]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)

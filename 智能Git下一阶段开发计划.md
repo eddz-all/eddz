@@ -1,8 +1,8 @@
-# ProjectPilot 智能 Git 下一阶段开发计划
+# ProjectPilot 智能 Git 核心闭环完成计划
 
 ## 1. 当前状态
 
-当前已经完成智能 Git MVP。
+当前已经完成智能 Git 核心闭环。
 
 已支持命令：
 
@@ -15,21 +15,38 @@ projectpilot git diff
 projectpilot git log
 projectpilot git fetch
 projectpilot git commit-plan
+projectpilot git add-plan
+projectpilot git add
+projectpilot git commit
+projectpilot git pull
+projectpilot git push
+projectpilot git switch
+projectpilot git merge
+projectpilot git stash
+projectpilot git tag
+projectpilot git revert
+projectpilot git cherry-pick
+projectpilot git danger-plan
+projectpilot git audit
+projectpilot git doctor
 ```
 
 当前能力特点：
 
-- 以只读分析为主；
-- `fetch` 是唯一低风险执行命令；
-- 不会自动 `add`、`commit`、`pull`、`push`；
+- 只读分析、受控执行、审计记录已经打通；
+- `fetch` 是低风险执行命令；
+- 会修改仓库状态的操作默认只展示计划；
+- `--apply` 才会真正执行；
 - 已能分析工作区变更并生成提交计划；
-- 已有基础测试覆盖。
+- 已能处理分支创建/切换、快进合并、stash、tag、revert、cherry-pick；
+- 已能对 `reset --hard`、`clean -fd`、`push --force`、`rebase` 生成禁止执行的风险计划；
+- 已有自动化测试覆盖。
 
-下一阶段目标是：**从智能分析进入受控执行**。
+下一阶段目标是：**把智能 Git 接入 Executor 和后端审批/历史记录**。
 
 ---
 
-## 2. 下一阶段目标
+## 2. 已完成目标
 
 实现一套安全、可解释、可确认的 Git 操作流程。
 
@@ -42,9 +59,20 @@ projectpilot git commit-plan
 - 执行后重新检测状态；
 - 每次执行都能被记录和复盘。
 
+当前实现满足这些原则。所有中风险操作都走：
+
+```text
+生成 OperationPlan
+展示风险 / 阻止原因 / 命令 / 回滚提示
+用户显式 --apply
+执行 Git 命令
+重新检测状态
+写入 .projectpilot/audit/git-operations.jsonl
+```
+
 ---
 
-## 3. 功能优先级
+## 3. 已完成的功能优先级
 
 ### 3.1 第一优先级：确认机制
 
@@ -85,6 +113,21 @@ projectpilot git commit --apply
 ```
 
 这样可以避免用户误触。
+
+当前已支持：
+
+```bash
+projectpilot git add --apply
+projectpilot git commit --apply
+projectpilot git push --apply
+projectpilot git pull --apply
+projectpilot git switch --apply
+projectpilot git merge --apply
+projectpilot git stash --apply
+projectpilot git tag --apply
+projectpilot git revert --apply
+projectpilot git cherry-pick --apply
+```
 
 ---
 
@@ -178,6 +221,31 @@ projectpilot git pull --apply
 - 没有 upstream 时不执行；
 - 执行前建议先 `fetch`；
 - 执行后重新生成状态摘要。
+
+### 4.6 分支、合并与恢复类命令
+
+当前已补齐核心协作命令：
+
+```bash
+projectpilot git switch feature/demo .
+projectpilot git switch feature/demo . --create
+projectpilot git merge feature/demo .
+projectpilot git stash .
+projectpilot git tag v1.0.0 .
+projectpilot git revert HEAD .
+projectpilot git cherry-pick abc1234 .
+projectpilot git danger-plan reset-hard .
+```
+
+规则：
+
+- `switch` / `switch --create` 要求工作区干净；
+- `merge` 当前只执行 `git merge --ff-only`；
+- 非快进合并只生成阻止原因和人工处理建议；
+- `stash` 默认只处理 tracked 变更，`--include-untracked` 才包含未跟踪文件；
+- `tag` 会检查 tag 是否已存在；
+- `revert` / `cherry-pick` 默认使用 `--no-commit`，让用户先审查结果；
+- `reset-hard` / `clean` / `force-push` / `rebase` 只生成高风险计划，不执行。
 
 ---
 
@@ -432,4 +500,3 @@ commit --apply
 - 所有执行操作后重新输出状态；
 - 高风险命令不会被执行；
 - 操作记录可以追溯。
-

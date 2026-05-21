@@ -20,13 +20,31 @@ from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import inspect_repository
 from projectpilot.git.operation_planner import (
     build_add_plan,
+    build_cherry_pick_operation_plan,
     build_commit_operation_plan,
+    build_high_risk_operation_plan,
+    build_merge_operation_plan,
     build_pull_operation_plan,
     build_push_operation_plan,
+    build_revert_operation_plan,
+    build_stash_operation_plan,
+    build_switch_operation_plan,
+    build_tag_operation_plan,
 )
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report, save_markdown_report
-from projectpilot.git.safe_executor import run_add, run_commit, run_pull, run_push
+from projectpilot.git.safe_executor import (
+    run_add,
+    run_cherry_pick,
+    run_commit,
+    run_merge,
+    run_pull,
+    run_push,
+    run_revert,
+    run_stash,
+    run_switch,
+    run_tag,
+)
 from projectpilot.models.audit_log import AuditEntry
 from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
 from projectpilot.models.doctor import DoctorReport
@@ -183,6 +201,89 @@ def build_parser() -> argparse.ArgumentParser:
     pull_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     pull_command.set_defaults(handler=handle_git_pull)
 
+    switch_command = git_subparsers.add_parser(
+        "switch",
+        help="Switch branches through a ProjectPilot plan.",
+    )
+    switch_command.add_argument("target", help="Local branch to switch to, or new branch name with --create.")
+    switch_command.add_argument("path", nargs="?", default=".", help="Repository path. Defaults to the current directory.")
+    switch_command.add_argument("--create", action="store_true", help="Create the branch before switching.")
+    switch_command.add_argument("--start-point", help="Start point for --create.")
+    switch_command.add_argument("--apply", action="store_true", help="Actually run git switch.")
+    switch_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    switch_command.set_defaults(handler=handle_git_switch)
+
+    merge_command = git_subparsers.add_parser(
+        "merge",
+        help="Plan or run a safe fast-forward merge.",
+    )
+    merge_command.add_argument("source", help="Branch or ref to merge into the current branch.")
+    merge_command.add_argument("path", nargs="?", default=".", help="Repository path. Defaults to the current directory.")
+    merge_command.add_argument("--apply", action="store_true", help="Actually run git merge --ff-only.")
+    merge_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    merge_command.set_defaults(handler=handle_git_merge)
+
+    stash_command = git_subparsers.add_parser(
+        "stash",
+        help="Stash local changes through a ProjectPilot plan.",
+    )
+    add_path_argument(stash_command)
+    stash_command.add_argument("-m", "--message", help="Stash message. Defaults to a ProjectPilot message.")
+    stash_command.add_argument(
+        "--include-untracked",
+        action="store_true",
+        help="Also stash untracked files.",
+    )
+    stash_command.add_argument("--apply", action="store_true", help="Actually run git stash push.")
+    stash_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    stash_command.set_defaults(handler=handle_git_stash)
+
+    tag_command = git_subparsers.add_parser(
+        "tag",
+        help="Create a Git tag through a ProjectPilot plan.",
+    )
+    tag_command.add_argument("name", help="Tag name to create.")
+    tag_command.add_argument("path", nargs="?", default=".", help="Repository path. Defaults to the current directory.")
+    tag_command.add_argument("-m", "--message", help="Create an annotated tag with this message.")
+    tag_command.add_argument("--apply", action="store_true", help="Actually run git tag.")
+    tag_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    tag_command.set_defaults(handler=handle_git_tag)
+
+    revert_command = git_subparsers.add_parser(
+        "revert",
+        help="Revert a commit through a ProjectPilot plan.",
+    )
+    revert_command.add_argument("revision", help="Commit to revert.")
+    revert_command.add_argument("path", nargs="?", default=".", help="Repository path. Defaults to the current directory.")
+    revert_command.add_argument("--commit", action="store_true", help="Create the revert commit immediately.")
+    revert_command.add_argument("--apply", action="store_true", help="Actually run git revert.")
+    revert_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    revert_command.set_defaults(handler=handle_git_revert)
+
+    cherry_pick_command = git_subparsers.add_parser(
+        "cherry-pick",
+        help="Cherry-pick a commit through a ProjectPilot plan.",
+    )
+    cherry_pick_command.add_argument("revision", help="Commit to cherry-pick.")
+    cherry_pick_command.add_argument("path", nargs="?", default=".", help="Repository path. Defaults to the current directory.")
+    cherry_pick_command.add_argument("--commit", action="store_true", help="Create the cherry-pick commit immediately.")
+    cherry_pick_command.add_argument("--apply", action="store_true", help="Actually run git cherry-pick.")
+    cherry_pick_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    cherry_pick_command.set_defaults(handler=handle_git_cherry_pick)
+
+    danger_command = git_subparsers.add_parser(
+        "danger-plan",
+        help="Explain why a high-risk Git operation is blocked by ProjectPilot.",
+    )
+    danger_command.add_argument(
+        "operation",
+        choices=["reset-hard", "clean", "force-push", "rebase"],
+        help="High-risk operation to explain.",
+    )
+    add_path_argument(danger_command)
+    danger_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    danger_command.set_defaults(handler=handle_git_danger_plan)
+
     audit_command = git_subparsers.add_parser(
         "audit",
         help="Show recent ProjectPilot Git operation audit entries.",
@@ -191,7 +292,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit_command.add_argument("--limit", type=int, default=20, help="Number of audit entries to show, from 1 to 100.")
     audit_command.add_argument(
         "--operation",
-        choices=["add", "commit", "push", "pull"],
+        choices=["add", "commit", "push", "pull", "switch", "merge", "stash", "tag", "revert", "cherry-pick"],
         help="Filter audit entries by operation.",
     )
     audit_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
@@ -522,6 +623,96 @@ def handle_git_pull(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_switch(args: argparse.Namespace) -> int:
+    plan = build_switch_operation_plan(
+        Path(args.path),
+        target=args.target,
+        create=args.create,
+        start_point=args.start_point,
+    )
+    if not args.apply:
+        return print_dry_run_operation(plan, args.json)
+
+    result = run_switch(
+        Path(args.path),
+        target=args.target,
+        create=args.create,
+        start_point=args.start_point,
+    )
+    return print_applied_operation(result, args.json)
+
+
+def handle_git_merge(args: argparse.Namespace) -> int:
+    plan = build_merge_operation_plan(Path(args.path), source=args.source)
+    if not args.apply:
+        return print_dry_run_operation(plan, args.json)
+
+    result = run_merge(Path(args.path), source=args.source)
+    return print_applied_operation(result, args.json)
+
+
+def handle_git_stash(args: argparse.Namespace) -> int:
+    plan = build_stash_operation_plan(
+        Path(args.path),
+        message=args.message,
+        include_untracked=args.include_untracked,
+    )
+    if not args.apply:
+        return print_dry_run_operation(plan, args.json)
+
+    result = run_stash(
+        Path(args.path),
+        message=args.message,
+        include_untracked=args.include_untracked,
+    )
+    return print_applied_operation(result, args.json)
+
+
+def handle_git_tag(args: argparse.Namespace) -> int:
+    plan = build_tag_operation_plan(Path(args.path), name=args.name, message=args.message)
+    if not args.apply:
+        return print_dry_run_operation(plan, args.json)
+
+    result = run_tag(Path(args.path), name=args.name, message=args.message)
+    return print_applied_operation(result, args.json)
+
+
+def handle_git_revert(args: argparse.Namespace) -> int:
+    plan = build_revert_operation_plan(Path(args.path), revision=args.revision, commit=args.commit)
+    if not args.apply:
+        return print_dry_run_operation(plan, args.json)
+
+    result = run_revert(Path(args.path), revision=args.revision, commit=args.commit)
+    return print_applied_operation(result, args.json)
+
+
+def handle_git_cherry_pick(args: argparse.Namespace) -> int:
+    plan = build_cherry_pick_operation_plan(Path(args.path), revision=args.revision, commit=args.commit)
+    if not args.apply:
+        return print_dry_run_operation(plan, args.json)
+
+    result = run_cherry_pick(Path(args.path), revision=args.revision, commit=args.commit)
+    return print_applied_operation(result, args.json)
+
+
+def handle_git_danger_plan(args: argparse.Namespace) -> int:
+    command_map = {
+        "reset-hard": (["git", "reset", "--hard"], "Reset the working tree and index to another commit."),
+        "clean": (["git", "clean", "-fd"], "Delete untracked files and directories."),
+        "force-push": (["git", "push", "--force"], "Rewrite the remote branch history."),
+        "rebase": (["git", "rebase"], "Rewrite local commit history."),
+    }
+    command, reason = command_map[args.operation]
+    plan = build_high_risk_operation_plan(Path(args.path), args.operation, reason, command)
+
+    if args.json:
+        print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_operation_plan(plan)
+    return 0
+
+
 def handle_git_audit(args: argparse.Namespace) -> int:
     entries = read_audit_entries(Path(args.path), limit=args.limit, operation=args.operation)
 
@@ -541,6 +732,26 @@ def handle_git_doctor(args: argparse.Namespace) -> int:
         return 0
 
     print_doctor_report(report)
+    return 0
+
+
+def print_dry_run_operation(plan: OperationPlan, as_json: bool) -> int:
+    if as_json:
+        print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_operation_plan(plan)
+    print()
+    print("Dry run only. Run again with --apply to execute.")
+    return 0
+
+
+def print_applied_operation(result: OperationResult, as_json: bool) -> int:
+    if as_json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_operation_result(result)
     return 0
 
 
@@ -566,7 +777,12 @@ def handle_git_quickstart(args: argparse.Namespace) -> int:
     print(f"   projectpilot git pull {path}")
     print(f"   projectpilot git push {path}")
     print()
-    print("6. Review ProjectPilot operation history")
+    print("6. Work with branches and release markers")
+    print(f"   projectpilot git switch feature/demo {path} --create")
+    print(f"   projectpilot git merge feature/demo {path}")
+    print(f"   projectpilot git tag v1.0.0 {path}")
+    print()
+    print("7. Review ProjectPilot operation history")
     print(f"   projectpilot git audit {path}")
     return 0
 
@@ -763,7 +979,9 @@ def print_operation_plan(plan: OperationPlan) -> None:
     if plan.suggested_message:
         print(f"Suggested message: {plan.suggested_message}")
     print()
-    planned_label = "Planned refs" if plan.operation in {"push", "pull"} else "Planned paths"
+    planned_label = "Planned refs" if plan.operation in {"push", "pull"} else "Planned targets"
+    if plan.operation in {"add", "commit", "merge", "stash"}:
+        planned_label = "Planned paths"
     print_file_group(planned_label, plan.planned_paths)
     print_file_group("Review paths", plan.review_paths)
     print_file_group("Excluded paths", plan.excluded_paths)
@@ -778,6 +996,10 @@ def print_operation_plan(plan: OperationPlan) -> None:
     if plan.command:
         print("Command:")
         print("  " + " ".join(plan.command))
+    if plan.rollback_commands:
+        print("Rollback:")
+        for command in plan.rollback_commands:
+            print("  " + " ".join(command))
 
 
 def print_operation_result(result: OperationResult) -> None:

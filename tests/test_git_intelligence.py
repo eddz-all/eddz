@@ -17,14 +17,32 @@ from projectpilot.git.executor import get_diff, get_log, run_fetch
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
 from projectpilot.git.operation_planner import (
     build_add_plan,
+    build_cherry_pick_operation_plan,
     build_commit_operation_plan,
+    build_high_risk_operation_plan,
+    build_merge_operation_plan,
     build_pull_operation_plan,
     build_push_operation_plan,
+    build_revert_operation_plan,
+    build_stash_operation_plan,
+    build_switch_operation_plan,
+    build_tag_operation_plan,
 )
 from projectpilot.git.parser import parse_ahead_behind
 from projectpilot.git.recommender import build_recommendations
 from projectpilot.git.reporter import render_markdown_report
-from projectpilot.git.safe_executor import run_add, run_commit, run_pull, run_push
+from projectpilot.git.safe_executor import (
+    run_add,
+    run_cherry_pick,
+    run_commit,
+    run_merge,
+    run_pull,
+    run_push,
+    run_revert,
+    run_stash,
+    run_switch,
+    run_tag,
+)
 
 
 class GitIntelligenceTests(unittest.TestCase):
@@ -524,6 +542,161 @@ class GitIntelligenceTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(data["health"], "attention")
             self.assertEqual(data["branch"], "main")
+
+    def test_switch_plan_create_branch_and_apply(self) -> None:
+        with git_repo() as repo:
+            plan = build_switch_operation_plan(repo, target="feature/demo", create=True)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "switch", "-c", "feature/demo"])
+
+            result = run_switch(repo, target="feature/demo", create=True)
+            status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="switch")
+
+            self.assertTrue(result.success)
+            self.assertEqual(status.branch, "feature/demo")
+            self.assertEqual(len(entries), 1)
+
+    def test_switch_plan_blocks_dirty_worktree(self) -> None:
+        with git_repo() as repo:
+            (repo / "tracked.txt").write_text("dirty\n", encoding="utf-8")
+
+            plan = build_switch_operation_plan(repo, target="main")
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("Working tree must be clean", "; ".join(plan.blockers))
+
+    def test_merge_plan_allows_fast_forward_and_apply(self) -> None:
+        with git_repo() as repo:
+            run(["git", "switch", "-c", "feature"], repo)
+            create_local_commit(repo, "feature.txt", "feature\n", "feature commit")
+            feature_commit = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+            run(["git", "switch", "main"], repo)
+
+            plan = build_merge_operation_plan(repo, source="feature")
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "merge", "--ff-only", "feature"])
+            self.assertIn("feature.txt", plan.planned_paths)
+
+            result = run_merge(repo, source="feature")
+            status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="merge")
+
+            self.assertTrue(result.success)
+            self.assertEqual(status.commit, feature_commit)
+            self.assertEqual(len(entries), 1)
+
+    def test_merge_plan_blocks_non_fast_forward_merge(self) -> None:
+        with git_repo() as repo:
+            run(["git", "switch", "-c", "feature"], repo)
+            create_local_commit(repo, "feature.txt", "feature\n", "feature commit")
+            run(["git", "switch", "main"], repo)
+            create_local_commit(repo, "main.txt", "main\n", "main commit")
+
+            plan = build_merge_operation_plan(repo, source="feature")
+
+            self.assertFalse(plan.allowed)
+            self.assertIn("fast-forward", "; ".join(plan.blockers))
+
+    def test_stash_plan_and_apply_include_untracked(self) -> None:
+        with git_repo() as repo:
+            (repo / "tracked.txt").write_text("dirty\n", encoding="utf-8")
+            (repo / "draft.txt").write_text("draft\n", encoding="utf-8")
+
+            plan = build_stash_operation_plan(repo, include_untracked=True)
+
+            self.assertTrue(plan.allowed)
+            self.assertIn("tracked.txt", plan.planned_paths)
+            self.assertIn("draft.txt", plan.planned_paths)
+
+            result = run_stash(repo, include_untracked=True)
+            status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="stash")
+
+            self.assertTrue(result.success)
+            self.assertTrue(status.is_clean)
+            self.assertEqual(len(entries), 1)
+
+    def test_tag_plan_and_apply_creates_tag(self) -> None:
+        with git_repo() as repo:
+            plan = build_tag_operation_plan(repo, name="v1.0.0", message="Release v1.0.0")
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "tag", "-a", "v1.0.0", "-m", "Release v1.0.0"])
+
+            result = run_tag(repo, name="v1.0.0", message="Release v1.0.0")
+            tag_lookup = run(["git", "rev-parse", "--verify", "v1.0.0"], repo)
+            entries = read_audit_entries(repo, operation="tag")
+
+            self.assertTrue(result.success)
+            self.assertTrue(tag_lookup.stdout.strip())
+            self.assertEqual(len(entries), 1)
+
+    def test_revert_plan_applies_without_commit_by_default(self) -> None:
+        with git_repo() as repo:
+            create_local_commit(repo, "revert-me.txt", "content\n", "add revert target")
+            revision = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+
+            plan = build_revert_operation_plan(repo, revision=revision)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "revert", "--no-commit", revision])
+
+            result = run_revert(repo, revision=revision)
+            status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="revert")
+
+            self.assertTrue(result.success)
+            self.assertFalse(status.is_clean)
+            self.assertIn("revert-me.txt", status.staged_files)
+            self.assertEqual(len(entries), 1)
+
+    def test_cherry_pick_plan_applies_without_commit_by_default(self) -> None:
+        with git_repo() as repo:
+            run(["git", "switch", "-c", "feature"], repo)
+            create_local_commit(repo, "picked.txt", "picked\n", "pick me")
+            revision = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+            run(["git", "switch", "main"], repo)
+
+            plan = build_cherry_pick_operation_plan(repo, revision=revision)
+
+            self.assertTrue(plan.allowed)
+            self.assertEqual(plan.command, ["git", "cherry-pick", "--no-commit", revision])
+
+            result = run_cherry_pick(repo, revision=revision)
+            status = inspect_repository(repo)
+            entries = read_audit_entries(repo, operation="cherry-pick")
+
+            self.assertTrue(result.success)
+            self.assertFalse(status.is_clean)
+            self.assertIn("picked.txt", status.staged_files)
+            self.assertEqual(len(entries), 1)
+
+    def test_high_risk_plan_blocks_destructive_operations(self) -> None:
+        with git_repo() as repo:
+            plan = build_high_risk_operation_plan(
+                repo,
+                operation="reset-hard",
+                reason="Reset the working tree and index to another commit.",
+                command=["git", "reset", "--hard"],
+            )
+
+            self.assertFalse(plan.allowed)
+            self.assertEqual(plan.risk, "high")
+            self.assertIn("will not run", "; ".join(plan.blockers))
+
+    def test_danger_plan_cli_outputs_json(self) -> None:
+        with git_repo() as repo:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = cli_main(["git", "danger-plan", "reset-hard", str(repo), "--json"])
+
+            data = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertFalse(data["allowed"])
+            self.assertEqual(data["operation"], "reset-hard")
 
 
 class git_repo:
