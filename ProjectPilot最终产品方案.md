@@ -711,6 +711,12 @@ AI 输出：
 
 Docker 也要覆盖完整能力面。
 
+Docker 细化设计单独沉淀在：
+
+```text
+ProjectPilot Docker智能化管理最终方案.md
+```
+
 覆盖的意思同样不是让 AI 随便执行所有 Docker 命令，而是：
 
 ```text
