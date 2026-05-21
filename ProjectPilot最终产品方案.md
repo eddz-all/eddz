@@ -407,16 +407,125 @@ ProjectPilot
 - 远程 Git 检测；
 - branch / upstream / remote 检测；
 - ahead / behind / diverged 判断；
+- 分支关系图分析；
+- 分支合并可行性分析；
+- merge base / changed files / conflict risk 分析；
 - dirty 文件分类；
 - commit plan；
 - safe add；
 - safe commit；
 - safe pull；
 - safe push；
+- branch create / switch 计划；
+- merge plan；
+- rebase plan；
+- cherry-pick plan；
 - Git 操作审计；
 - 冲突解释；
+- 冲突解决建议；
 - 分叉解释；
+- PR / MR 摘要生成；
 - 部署前 Git 检查。
+
+智能 Git 的目标不是把几个 Git 命令包一层按钮，而是让 AI 参与完整分支协作流程。
+
+用户可以问：
+
+```text
+feature/login 能不能合进 main？
+为什么我这个分支和远端分叉了？
+这两个分支冲突大不大？
+帮我生成合并计划。
+帮我解释冲突文件应该怎么处理。
+这个 rebase 有没有风险？
+```
+
+AI 应该输出：
+
+```text
+目标：把 feature/login 合并到 main
+
+分析：
+1. main 比本地落后 2 个提交，建议先 fetch 并更新。
+2. feature/login 比 main 多 5 个提交。
+3. 涉及文件：auth.py、login_view.py、tests/test_login.py。
+4. auth.py 两边都修改过，存在冲突风险。
+5. 该分支已经 push 到远端，不建议直接 rebase 公共历史。
+
+建议计划：
+1. git fetch
+2. 检查 main 和 feature/login 的 merge-base
+3. 在临时 worktree 中预演 merge
+4. 如果无冲突，生成合并提交计划
+5. 如果有冲突，列出冲突文件并给出人工可审查的解决建议
+
+需要用户批准：
+- 是否允许创建临时 worktree
+- 是否允许执行真实 merge
+- 是否允许 AI 修改冲突文件
+```
+
+### 分支与合并能力分层
+
+只读分析能力：
+
+```text
+git branch
+git branch -vv
+git merge-base
+git log --graph
+git diff branchA...branchB
+git diff --name-status branchA...branchB
+git show
+git blame
+```
+
+这些能力可以自动执行，用于让 AI 理解分支关系、提交差异和冲突风险。
+
+可审批执行能力：
+
+```text
+git switch
+git switch -c
+git merge --ff-only
+git merge --no-commit
+git cherry-pick --no-commit
+```
+
+这些操作会改变工作区或索引，必须生成计划，并在用户确认后执行。
+
+强确认能力：
+
+```text
+git merge
+git rebase 私有分支
+git cherry-pick
+AI 修改冲突文件
+git merge --abort
+git rebase --abort
+```
+
+这些操作可以被 ProjectPilot 支持，但必须展示：
+
+- 执行前分支；
+- 执行前 commit；
+- 涉及文件；
+- 可能冲突；
+- 回滚方式；
+- 是否已经 push 到远端；
+- 是否影响公共历史。
+
+默认禁止能力：
+
+```text
+git rebase 公共分支
+git push --force
+git reset --hard
+git clean -fd
+删除受保护分支
+```
+
+这些操作只能作为风险解释和人工建议，不能由 AI 默认执行。
 
 ### Git 安全规则
 
@@ -427,6 +536,8 @@ git status
 git log
 git diff
 git fetch
+git branch
+git merge-base
 ```
 
 允许在条件满足时执行：
@@ -436,6 +547,18 @@ git pull --ff-only
 git push
 git add
 git commit
+git switch
+git switch -c
+git merge --ff-only
+```
+
+允许强确认后执行：
+
+```text
+git merge
+git rebase 私有分支
+git cherry-pick
+AI 写入冲突解决 patch
 ```
 
 默认禁止：
@@ -444,11 +567,11 @@ git commit
 git reset --hard
 git clean -fd
 git push --force
-git rebase
-git merge
+git rebase 公共分支
+删除受保护分支
 ```
 
-这些高风险命令只能作为 AI 建议，不自动执行。
+ProjectPilot 对复杂 Git 操作的原则是：AI 可以分析、预演、生成计划和建议解决方案，但真实改变仓库历史或写入冲突文件前，必须获得用户批准。
 
 ## 5.3 远程服务器管理
 
@@ -1067,7 +1190,52 @@ AI 总结恢复结果
   ↓
 AI 解释分叉原因
   ↓
-给出人工处理建议
+AI 生成分叉处理方案：
+  1. merge 方案
+  2. rebase 私有分支方案
+  3. cherry-pick 方案
+  4. 放弃某部分改动方案
+  ↓
+用户选择一个方案并审批
+  ↓
+Agent 在本机或临时 worktree 中预演
+  ↓
+如果无冲突，生成真实执行计划
+  ↓
+如果有冲突，AI 解释冲突并给出可审查 patch
+  ↓
+用户批准后才写入冲突解决结果
+```
+
+### 8.6 AI 辅助分支合并
+
+```text
+用户选择 source 分支和 target 分支
+  ↓
+AI 读取分支关系、merge-base、提交列表、文件差异
+  ↓
+AI 判断：
+    是否 fast-forward
+    是否会产生 merge commit
+    是否涉及公共历史
+    是否可能冲突
+    是否影响部署文件
+  ↓
+AI 生成 MergePlan
+  ↓
+后端标记风险等级
+  ↓
+用户批准预演
+  ↓
+Agent 创建临时 worktree 或干净检查点
+  ↓
+执行 merge / rebase / cherry-pick 预演
+  ↓
+上传冲突文件和结果
+  ↓
+AI 生成解释和解决建议
+  ↓
+用户批准真实执行或放弃
 ```
 
 ## 9. 最终技术选型
@@ -1237,6 +1405,8 @@ projectpilot execution rollback exec_18
 - git fetch；
 - git pull --ff-only；
 - git push safe；
+- branch / merge-base / 分支差异分析；
+- 分支分叉解释；
 - AI 计划审批；
 - 用户编辑计划；
 - 远程操作审计；
@@ -1247,6 +1417,8 @@ projectpilot execution rollback exec_18
 - 操作前后状态对比；
 - TUI 计划审批与编辑；
 - TUI 执行历史查看。
+
+此阶段可以让 AI 解释分支关系和合并风险，但真实 `merge / rebase / cherry-pick` 仍只生成计划，不默认执行。
 
 ## V3：环境配置版
 
@@ -1269,6 +1441,16 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - TUI 环境修复计划审批；
 - TUI 回滚计划确认。
 
+同时补齐智能 Git 复杂协作能力：
+
+- merge plan；
+- rebase plan；
+- cherry-pick plan；
+- 临时 worktree 合并预演；
+- 冲突文件解释；
+- AI 冲突解决建议；
+- 用户批准后应用冲突解决 patch。
+
 ## V4：团队协作版
 
 目标：
@@ -1287,7 +1469,10 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 审计日志；
 - 团队 AI 报告；
 - 多用户 TUI 登录；
-- 团队审批视图。
+- 团队审批视图；
+- PR / MR 摘要生成；
+- 团队合并审批；
+- 受保护分支策略。
 
 ## V5：生产平台版
 
@@ -1332,7 +1517,8 @@ ProjectPilot 不应该做：
 - 执行未批准或已被用户修改但未重新批准的计划；
 - 临时添加批准计划之外的命令；
 - 声称所有操作都能完整回滚；
-- 替用户自动解决复杂冲突；
+- 未经批准替用户自动解决复杂冲突；
+- 未经批准改写公共 Git 历史；
 - 让 AI 无限制运行 shell；
 - 删除或覆盖用户代码。
 
