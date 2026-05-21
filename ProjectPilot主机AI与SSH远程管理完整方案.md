@@ -21,34 +21,61 @@ ProjectPilot 的目标不是让 AI 无限制接管服务器，而是做一个可
 前端
   ↓
 主机后端 / 数据库 / AI
-  ↓ 任务调度
-本机 ProjectPilot macOS App / Agent
+  ↓ 已批准任务
+Executor 执行器层
   ↓ SSH
 远程服务器
 ```
+
+架构更新说明：
+
+```text
+AI = 决策大脑
+Executor = 手
+后端 = 神经系统 + 当前状态记忆
+数据库 = 历史记录 + 审计证据
+```
+
+Executor 有两种模式：
+
+```text
+Central Executor
+  部署在主机后端所在机器。
+  读取主机上的 SSH config 或托管 SSH Host 配置。
+  作为服务器集中管理的主模式。
+
+Local Agent Executor
+  部署在用户本机或内网机器。
+  读取本机 ~/.ssh/config 和 ssh-agent。
+  作为私钥不出本机、主机不能直连内网时的补充模式。
+```
+
+因此，旧文档中提到的 “本机 App / Agent” 应理解为 Local Agent Executor；最终产品还需要支持 Central Executor。
 
 ## 2. 关键原则
 
 ### 2.1 AI 不直接持有 SSH 私钥
 
-SSH 私钥应保留在用户本机。
+SSH 私钥不应该交给 AI Planner。私钥可以由受控 Executor 读取或托管，取决于执行模式。
 
 主机 AI 不应该直接拿到：
 
 - `~/.ssh/id_rsa`;
 - `~/.ssh/id_ed25519`;
 - 私钥文本；
-- 完整 SSH 配置文件；
 - 服务器 root 密码。
 
 推荐方式：
 
 ```text
 主机 AI 生成任务
-本机 App 读取 ~/.ssh/config
-本机 App 使用 ssh-agent / 本机私钥连接服务器
-本机 App 上传执行结果
+用户批准计划
+Executor 读取 SSH config 或托管 Host 配置
+Executor 使用 ssh-agent / Keychain / 受控密钥路径连接服务器
+Executor 上传执行结果
 ```
+
+Central Executor 可以集中管理服务器 SSH Host 和密钥路径，但仍然不能让 AI 直接读取私钥文本或自由拼接命令。
 
 ### 2.2 第一阶段只做只读检测
 

@@ -25,15 +25,17 @@ AI 建议我下一步做什么？
 
 ## 2. 最终产品形态
 
-ProjectPilot 最终由六个部分组成：
+ProjectPilot 最终由八个逻辑部分组成：
 
 ```text
 1. Web 前端
 2. macOS / Windows / Linux 桌面 GUI 主应用
 3. Rust TUI 终端交互端 + CLI 脚本入口
-4. 主机后端 + 数据库 + AI
-5. 本机 Agent 服务 / 执行器
-6. 远程服务器 SSH 执行层
+4. 主机后端 API / 任务调度 / 审批系统
+5. AI Planner 决策大脑
+6. 数据库 / 历史记录 / 审计日志
+7. Executor 执行器层
+8. 远程服务器 SSH / Git / Docker 执行层
 ```
 
 整体结构：
@@ -47,14 +49,26 @@ ProjectPilot 最终由六个部分组成：
             └─────────────────────────┼─────────────────────────┘
                                       ▼
 ┌──────────────────────────────┐
-│     主机后端 / 数据库 / AI      │
-│ 任务调度 / 权限 / 审计 / 分析    │
+│      主机后端 API / 调度系统      │
+│  权限 / 审批 / 任务队列 / 状态流   │
 └───────────────┬──────────────┘
-                │ 轮询任务 / 上传结果
+                │ 调用 / 保存 / 派发
                 ▼
 ┌──────────────────────────────┐
-│       本机 Agent 服务 / 执行器   │
-│ SSH 配置 / 私钥 / 本机权限边界   │
+│        AI Planner 决策大脑       │
+│  分析 / 计划 / 风险 / 回滚建议     │
+└───────────────┬──────────────┘
+                │ 生成结构化计划
+                ▼
+┌──────────────────────────────┐
+│      数据库 / 历史记录 / 审计    │
+│ 状态快照 / ApprovedPlan / Log   │
+└───────────────┬──────────────┘
+                │ 已批准任务
+                ▼
+┌──────────────────────────────┐
+│          Executor 执行器层      │
+│ Central Exec / Local Agent Exec│
 └───────────────┬──────────────┘
                 │ SSH
                 ▼
@@ -65,6 +79,31 @@ ProjectPilot 最终由六个部分组成：
 ```
 
 Web 前端、桌面 GUI 主应用、Rust TUI 和 CLI 都是操作入口。Web 适合团队和浏览器访问，桌面 GUI App 适合个人日常本机使用，TUI 适合终端里的审批、编辑计划、执行和回滚，CLI 适合脚本化。它们调用同一个后端和同一套权限/审计/计划模型。
+
+核心分工必须非常清楚：
+
+```text
+AI = 决策大脑
+Executor = 手
+后端 = 神经系统 + 当前状态记忆
+数据库 = 历史记录 + 审计证据
+```
+
+AI 不直接自由敲命令。AI 负责分析、生成计划、判断风险和提出回滚建议；Executor 负责连接 SSH、执行 Git/Docker/环境命令、采集结果；后端负责 API、权限、审批、任务调度和状态流转；数据库负责保存项目状态、计划版本、审批记录、执行日志、快照和回滚历史。
+
+最终执行层有两种模式：
+
+```text
+Central Executor 模式
+  主机后端所在机器保存/加载 SSH config，集中连接多台服务器。
+  这是服务器集中管理的主模式，速度快，执行链路短。
+
+Local Agent Executor 模式
+  用户本机或内网机器运行 Agent，复用本机 ~/.ssh/config 和 ssh-agent。
+  这是私钥不出本机、主机无法直连内网机器时的补充模式。
+```
+
+两种模式都不是第二个 AI。它们都是普通执行器，只执行已批准的结构化计划。
 
 ## 3. 用户最终怎么使用
 
@@ -81,15 +120,17 @@ Backend URL:  http://主机后端地址
 Token:        ********
 Machine ID:   eddz-mac
 Allowed Root: /Users/eddz/work
+Executor:     Central / Local Agent
 
-[连接主机] [启动本机 Agent] [扫描 SSH 配置] [进入控制台]
+[连接主机] [选择执行器模式] [扫描 SSH 配置] [进入控制台]
 ```
 
-用户只需要做三件事：
+用户只需要做四件事：
 
 1. 填后端地址；
-2. 填后端生成的 Agent token；
-3. 选择本机项目根目录。
+2. 填后端生成的 Executor token；
+3. 选择执行器模式；
+4. 选择本机项目根目录。
 
 然后点击：
 
@@ -97,11 +138,15 @@ Allowed Root: /Users/eddz/work
 连接主机
 ```
 
-桌面 GUI 主应用连接成功后，用户看到的是完整项目控制台；本机 Agent 作为后台服务运行，负责本机检测、SSH 执行和权限边界。
+桌面 GUI 主应用连接成功后，用户看到的是完整项目控制台。执行器负责真正连接 SSH、执行 Git/Docker/环境命令。
+
+如果选择 Central Executor，主机后端所在机器负责保存或加载 SSH config，并集中连接多台服务器。
+
+如果选择 Local Agent Executor，本机 Agent 作为后台服务运行，负责本机检测、SSH 执行和权限边界。
 
 ### 3.2 添加远程服务器
 
-桌面 GUI App 或 Agent 设置页自动扫描：
+桌面 GUI App、Central Executor 设置页或 Local Agent 设置页自动扫描：
 
 ```text
 ~/.ssh/config
@@ -123,7 +168,7 @@ Allowed Root: /Users/eddz/work
 [测试连接]
 ```
 
-ProjectPilot 使用本机 SSH 配置测试，不上传私钥。
+ProjectPilot 使用执行器所在机器的 SSH 配置测试连接。Central Executor 使用主机上的 SSH config；Local Agent Executor 使用用户本机的 SSH config。默认不上传私钥明文。
 
 ### 3.3 绑定项目
 
@@ -207,7 +252,7 @@ AI 生成计划
   ↓
 用户确认
   ↓
-Agent 通过 SSH 执行
+Executor 通过 SSH 执行
   ↓
 结果回传数据库
   ↓
@@ -242,7 +287,7 @@ AI 生成建议和计划
   ↓
 后端保存被批准的计划版本
   ↓
-Agent 只执行这个被批准的版本
+Executor 只执行这个被批准的版本
   ↓
 执行全过程写入历史
 ```
@@ -905,7 +950,7 @@ git pull --ff-only
 [确认执行]
 ```
 
-Agent 执行后上传结果。
+Executor 执行后上传结果。
 
 AI 继续说明：
 
@@ -981,7 +1026,7 @@ AI 执行计划：同步 dev-server 并检查运行环境
 ApprovedExecutionPlan
 ```
 
-Agent 只能执行这个已批准计划，不能临时扩展命令。
+Executor 只能执行这个已批准计划，不能临时扩展命令。
 
 ### 5.8.1 执行时的保护机制
 
@@ -993,7 +1038,7 @@ Agent 只能执行这个已批准计划，不能临时扩展命令。
 - 每一步都在白名单或风险许可范围内；
 - 每一步都有执行前快照；
 - 中高风险步骤有确认记录；
-- Agent 执行结果逐步上传；
+- Executor 执行结果逐步上传；
 - 失败后停止后续高风险步骤。
 
 ### 5.8.2 回滚入口
@@ -1018,7 +1063,7 @@ AI 生成回滚计划
   ↓
 用户确认
   ↓
-Agent 执行回滚
+Executor 执行回滚
   ↓
 保存回滚历史
 ```
@@ -1033,7 +1078,7 @@ Agent 执行回滚
 Dashboard
 Projects
 Servers
-Agents
+Executors
 AI Assistant
 Operations
 Settings
@@ -1044,7 +1089,7 @@ Settings
 展示全局状态：
 
 - 项目总数；
-- 在线 Agent；
+- 在线 Executor；
 - 服务器健康；
 - Git 异常；
 - 环境异常；
@@ -1132,7 +1177,7 @@ Execution #18
 - 不想每次打开浏览器的个人用户；
 - 需要本机原生窗口、菜单、通知和托盘状态的用户；
 - 需要同时管理本机项目和远程服务器的开发者；
-- 希望把 Agent 配置、项目控制台和审批中心放在一个桌面应用里的用户。
+- 希望把 Executor 配置、项目控制台和审批中心放在一个桌面应用里的用户。
 
 桌面 GUI 主应用负责：
 
@@ -1142,7 +1187,7 @@ Execution #18
 - 展示 AI 对话；
 - 展示计划审批中心；
 - 展示执行历史和回滚入口；
-- 管理本机 Agent 的启动、停止和状态；
+- 管理 Executor 的启动、停止和状态；
 - 管理 SSH Host 扫描和连接测试；
 - 通过系统通知提醒高风险审批；
 - 在本机安全地打开项目目录、终端或日志文件。
@@ -1167,44 +1212,65 @@ Main:
   dev-server                Docker healthy / Git behind 2
   prod-server               healthy
 
-Agent:
-  eddz-mac                  running
-  Allowed Root              /Users/eddz/work
+Executor:
+  Mode                      Central Executor
+  Executor                  host-executor running
+  SSH Hosts                 3 connected
 
-[Ask AI] [Detect All] [Review Plans] [Open Agent Settings]
+[Ask AI] [Detect All] [Review Plans] [Open Executor Settings]
 ```
 
 桌面 GUI App 和 Web 前端展示同一套业务数据，但体验不同：
 
 ```text
 Web 前端：适合团队共享、远程访问、浏览器打开。
-桌面 GUI App：适合个人日常使用、本机通知、本机 Agent 管理。
+桌面 GUI App：适合个人日常使用、本机通知、Executor 管理。
 ```
 
-桌面 GUI App 可以内置或启动本机 Agent，但不能绕过后端审批和审计。
+桌面 GUI App 可以管理 Central Executor 或 Local Agent Executor，但不能绕过后端审批和审计。
 
-## 6.3 本机 Agent App / Agent 服务
+## 6.3 Executor 执行器层
 
-本机 Agent App / Agent 服务不是主要业务前端，而是本机执行控制器。
+Executor 执行器层不是主要业务前端，而是 AI 和服务器之间的“手”。
 
 它负责：
 
-- 登录主机；
-- 保存 token；
-- 读取 SSH 配置；
-- 管理本机 allowed-root；
-- 显示 Agent 运行状态；
+- 保存或读取 SSH config；
+- 管理多台 SSH Host；
+- 支持免密登录；
+- 测试连接；
+- 复用 SSH 连接；
+- 执行已批准的 Git / Docker / 环境命令；
+- 采集执行前后快照；
+- 上传 stdout / stderr / exit code；
+- 阻止未批准或越权命令；
+- 显示 Executor 运行状态；
 - 显示最近任务；
 - 必要时弹出确认窗口。
 
-最终 App 窗口：
+Executor 有两种形态：
 
 ```text
-ProjectPilot Agent
+Central Executor
+  部署在主机后端所在机器。
+  读取主机的 ~/.ssh/config 或后端托管的 SSH Host 配置。
+  适合主机可以直连所有服务器的场景。
+
+Local Agent Executor
+  部署在用户本机或内网机器。
+  读取本机 ~/.ssh/config、ssh-agent、Keychain。
+  适合私钥不出本机、主机不能直连内网服务器的场景。
+```
+
+最终 Executor 设置窗口：
+
+```text
+ProjectPilot Executor
 
 主机连接：Connected
-Machine ID：eddz-mac
-Allowed Root：/Users/eddz/work
+Mode：Central Executor
+Executor ID：host-executor-01
+Allowed Root：/srv /opt /home/deploy
 
 SSH Servers:
   dev-server      connected
@@ -1216,7 +1282,7 @@ Recent Tasks:
   detect_environment prod      success
   git_pull_ff_only dev-server  waiting confirmation
 
-[Start Agent] [Stop Agent] [Scan SSH Config] [Open Web]
+[Start Executor] [Stop Executor] [Scan SSH Config] [Test All] [Open Web]
 ```
 
 ## 6.4 Rust TUI 终端端
@@ -1289,7 +1355,7 @@ Rollback preparation:
 TUI 与桌面 GUI App 的关系：
 
 ```text
-桌面 GUI App 适合看全局、配置 Agent、接收本机通知。
+桌面 GUI App 适合看全局、配置 Executor、接收本机通知。
 TUI 适合终端里快速处理计划、审批、执行、回滚。
 CLI 适合脚本和 CI。
 ```
@@ -1311,18 +1377,32 @@ CLI 适合脚本和 CI。
 - 修改 AI 计划；
 - 批准 AI 计划；
 - 批准回滚计划；
-- 管理 Agent；
+- 管理 Executor；
 - 查看审计。
 
-### 7.2 Agent 权限
+### 7.2 Executor 权限
 
-控制 Agent 能否：
+控制 Executor 能否：
 
 - 执行本地检测；
 - 读取 SSH config；
 - 连接哪些服务器；
 - 执行哪些任务类型；
 - 访问哪些路径。
+
+Executor 权限还要区分模式：
+
+```text
+Central Executor
+  适合集中管理服务器。
+  权限由后端管理员配置。
+  可以统一维护 SSH Host、密钥路径、服务器标签和允许命令。
+
+Local Agent Executor
+  适合本机和内网环境。
+  权限由本机用户授权。
+  默认复用本机 ~/.ssh/config、ssh-agent 和 allowed-root。
+```
 
 ### 7.3 命令权限
 
@@ -1352,13 +1432,16 @@ rejected    用户拒绝
 
 只有 `approved` 状态的计划可以进入执行队列。
 
-Agent 接到任务时必须校验：
+Executor 接到任务时必须校验：
 
 ```text
 task.plan_id 存在
 task.plan_version 是已批准版本
 task.approval_id 存在
 task.command 与批准计划一致
+task.executor_id 在允许范围内
+task.server_id 在允许范围内
+task.path 在 allowed-root 内
 ```
 
 ## 8. 最终数据流
@@ -1370,11 +1453,11 @@ task.command 与批准计划一致
   ↓
 后端创建多个检测任务
   ↓
-Agent 轮询任务
+Executor 获取任务
   ↓
-Agent 本地/SSH 执行检测
+Executor 本地/SSH 执行检测
   ↓
-Agent 上传结果
+Executor 上传结果
   ↓
 后端保存 GitStatus / EnvironmentSnapshot
   ↓
@@ -1398,7 +1481,7 @@ AI 生成 git_pull_ff_only 任务
   ↓
 用户确认
   ↓
-Agent SSH 执行 git pull --ff-only
+Executor SSH 执行 git pull --ff-only
   ↓
 上传结果
   ↓
@@ -1425,11 +1508,11 @@ AI 生成 ExecutionPlan 草稿
   ↓
 后端保存 ApprovedExecutionPlan
   ↓
-Agent 拉取已批准任务
+Executor 获取已批准任务
   ↓
-Agent 执行前生成快照
+Executor 执行前生成快照
   ↓
-Agent 逐步执行
+Executor 逐步执行
   ↓
 每一步结果上传后端
   ↓
@@ -1449,7 +1532,7 @@ AI 根据执行前快照生成回滚计划
   ↓
 用户查看并批准回滚计划
   ↓
-Agent 执行回滚
+Executor 执行回滚
   ↓
 后端保存 RollbackLog
   ↓
@@ -1475,7 +1558,7 @@ AI 生成分叉处理方案：
   ↓
 用户选择一个方案并审批
   ↓
-Agent 在本机或临时 worktree 中预演
+Executor 在本机或临时 worktree 中预演
   ↓
 如果无冲突，生成真实执行计划
   ↓
@@ -1504,7 +1587,7 @@ AI 生成 MergePlan
   ↓
 用户批准预演
   ↓
-Agent 创建临时 worktree 或干净检查点
+Executor 创建临时 worktree 或干净检查点
   ↓
 执行 merge / rebase / cherry-pick 预演
   ↓
@@ -1542,12 +1625,38 @@ AI 生成 DockerPlan
   ↓
 用户批准只读诊断或变更执行
   ↓
-Agent 通过本机或 SSH 执行 Docker / Compose 命令
+Executor 通过本机或 SSH 执行 Docker / Compose 命令
   ↓
 执行前后保存 DockerSnapshot
   ↓
 AI 总结结果，并在可回滚时生成回滚计划
 ```
+
+### 8.8 Central Executor 执行链路
+
+```text
+用户在 Web / Desktop / TUI / CLI 发起目标
+  ↓
+后端调用 AI Planner 生成结构化计划
+  ↓
+用户批准计划
+  ↓
+后端写入 ApprovedPlan 和 ExecutorTask
+  ↓
+Central Executor 从队列获取任务
+  ↓
+Central Executor 复用 SSH config / 连接池
+  ↓
+Central Executor 在多台服务器上执行 Git / Docker / 环境命令
+  ↓
+Executor 上传快照、日志、退出码和状态
+  ↓
+数据库保存历史
+  ↓
+AI 可选调用一次生成总结
+```
+
+这个链路里只有一个 AI。Executor 不是 AI，它只是 SSH 连接管理器、命令执行器、快照采集器和审计记录器。
 
 ## 9. 最终技术选型
 
@@ -1566,7 +1675,8 @@ WebSocket / SSE 用于实时状态
 
 - 项目模块；
 - 服务器模块；
-- Agent 模块；
+- Executor 模块；
+- Agent 兼容模块；
 - 任务模块；
 - AI 计划模块；
 - 审批模块；
@@ -1590,9 +1700,9 @@ Windows: Tauri / .NET / Electron
 Linux: Tauri / AppImage / Flatpak
 ```
 
-第一版可以先做 macOS SwiftUI，因为当前用户环境在 macOS，且需要原生窗口、系统通知、菜单栏和本机 Agent 管理。
+第一版可以先做 macOS SwiftUI，因为当前用户环境在 macOS，且需要原生窗口、系统通知、菜单栏和 Executor 管理。
 
-桌面 GUI 主应用通过后端 API 获取数据，不直接操作远程服务器。真实执行仍然由后端创建任务、本机 Agent 拉取任务并执行。
+桌面 GUI 主应用通过后端 API 获取数据，不直接操作远程服务器。真实执行仍然由后端创建任务，Executor 获取任务并执行。
 
 桌面 GUI 主应用需要包含：
 
@@ -1604,30 +1714,40 @@ Linux: Tauri / AppImage / Flatpak
 - 计划审批；
 - 执行历史；
 - 回滚入口；
-- Agent 状态；
+- Executor 状态；
 - SSH Host 管理；
 - 设置页。
 
-### 9.3 本机 Agent 设置窗口 / Agent 服务
+### 9.3 Executor 执行器
 
 推荐：
 
 ```text
-macOS: LaunchAgent + SwiftUI 设置窗口
-Windows: 后台 Service + 托盘设置窗口
-Linux: systemd user service + Tauri/AppImage 设置窗口
+Central Executor: 后端同机进程 / Worker / systemd service
+Local Agent Executor: macOS LaunchAgent / Windows Service / Linux systemd user service
+SSH: OpenSSH + ControlMaster / ControlPersist
+任务队列: Redis / PostgreSQL queue / Celery / RQ
 ```
 
-当前 macOS 版本：
+Executor 内部模块：
 
 ```text
-SwiftUI 窗口
-调用本地 Python Agent
-读取 ~/.projectpilot/agent.json
-使用系统 ssh
+SSHConfigStore
+SSHConnectionPool
+CommandTemplateRegistry
+GitExecutor
+DockerExecutor
+EnvironmentExecutor
+SnapshotCollector
+AuditUploader
+RollbackPreparer
 ```
 
-Agent 服务可以被桌面 GUI 主应用启动和管理，也可以独立运行。
+Central Executor 部署在主机后端侧，是服务器集中管理的主模式。
+
+Local Agent Executor 部署在用户本机或内网机器，是私钥不出本机、主机不能直连内网时的补充模式。
+
+桌面 GUI 主应用可以启动和管理 Local Agent Executor；后端管理界面可以启动和管理 Central Executor。
 
 ### 9.4 Rust TUI
 
@@ -1673,7 +1793,7 @@ POST /executions/{execution_id}/rollback-plan
 ```text
 后端审批记录
   ↓
-Agent 轮询
+Executor 获取任务
   ↓
 SSH 执行器
   ↓
@@ -1696,7 +1816,7 @@ CLI 适合：
 
 ```bash
 projectpilot git doctor .
-projectpilot agent connect
+projectpilot executor status
 projectpilot plan approve plan_42
 projectpilot execution rollback exec_18
 ```
@@ -1726,7 +1846,8 @@ projectpilot execution rollback exec_18
 能力：
 
 - macOS 桌面 GUI 主应用；
-- 本机 Agent 服务；
+- Central Executor；
+- Local Agent Executor；
 - 后端连接；
 - SSH Host 扫描；
 - 连接测试；
@@ -1858,7 +1979,7 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 自动健康巡检；
 - 部署前检查；
 - 回滚建议；
-- 多平台 Agent；
+- 多平台 Executor；
 - 多平台桌面 GUI App；
 - Web / 桌面 GUI / CLI / TUI 四端一致；
 - Rust TUI 跨平台分发。
@@ -1898,7 +2019,7 @@ ProjectPilot 不应该做：
 最终 ProjectPilot 应该做成：
 
 ```text
-一个同时提供 Web 控制台、桌面 GUI App、Rust TUI、CLI 和本机 Agent 的 AI 项目控制台。
+一个同时提供 Web 控制台、桌面 GUI App、Rust TUI、CLI 和 Executor 执行层的 AI 项目控制台。
 ```
 
 用户感受到的是：
@@ -1916,16 +2037,18 @@ AI 生成的计划我可以直接批准，也可以修改后再批准。
 
 ```text
 Web 前端负责展示
-桌面 GUI App 负责本机图形化使用、通知和 Agent 管理
+桌面 GUI App 负责本机图形化使用、通知和 Executor 管理
 Rust TUI 负责终端交互、计划审批和回滚入口
 CLI 负责脚本化自动化
-后端负责调度、存储、权限、AI
-本机 Agent 服务负责本机权限和 SSH 执行
+AI Planner 负责分析、决策、计划和回滚建议
+后端负责 API、调度、权限、审批和状态流转
+数据库负责历史记录、审计证据和快照
+Executor 负责 SSH 连接、Git/Docker/环境命令执行和结果采集
 远程服务器只接受受控任务
 ```
 
 一句话终局：
 
 ```text
-ProjectPilot = AI 大脑 + 项目数据库 + Web 控制台 + 桌面 GUI App + Rust TUI + CLI + 本机 Agent + SSH 执行器 + Git/Docker/环境安全控制台。
+ProjectPilot = AI 决策大脑 + 后端神经系统 + 数据库历史记录 + Web 控制台 + 桌面 GUI App + Rust TUI + CLI + Executor 执行器 + Git/Docker/环境安全控制台。
 ```
