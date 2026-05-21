@@ -1,5 +1,57 @@
 # ProjectPilot 最终产品方案
 
+## 0. 阅读指南
+
+这篇文档是 ProjectPilot 的总方案，是所有后续设计和开发的主线文档。
+
+如果只想快速理解最终成品，先读：
+
+```text
+0. 阅读指南
+1. 一句话定位
+2. 最终产品形态
+12. 最终结论
+```
+
+如果要拆开发任务，再读：
+
+```text
+5. 最终核心功能
+6. 最终界面设计
+8. 最终数据流
+9. 最终技术选型
+10. 最终版本路线
+```
+
+如果要做后端和执行层，重点读：
+
+```text
+2. 最终产品形态
+7. 最终权限模型
+8.8 Central Executor 执行链路
+9.1 后端
+9.3 Executor 执行器
+```
+
+本文的核心结论：
+
+```text
+ProjectPilot = AI 决策大脑 + 后端神经系统 + 数据库历史记录 + Executor 执行器 + 多端用户入口。
+```
+
+几个词的固定含义：
+
+| 名称 | 含义 | 不负责什么 |
+| --- | --- | --- |
+| AI Planner | 分析状态、生成计划、判断风险、提出回滚建议 | 不直接自由敲命令 |
+| 后端 | API、权限、审批、任务调度、状态流转 | 不直接代替用户绕过审批 |
+| 数据库 | 保存项目状态、计划版本、审批、快照、审计历史 | 不做决策 |
+| Executor | 连接 SSH，执行已批准的 Git/Docker/环境命令，采集结果 | 不是第二个 AI |
+| Web 前端 | 团队和浏览器入口 | 不直接连接服务器 |
+| 桌面 GUI App | 本机图形化入口、通知、Executor 管理 | 不绕过后端审批 |
+| Rust TUI | 终端里的交互式入口 | 不直接拼接危险命令 |
+| CLI | 脚本化和 CI 入口 | 不替代审批模型 |
+
 ## 1. 一句话定位
 
 ProjectPilot 最终要做成一个：
@@ -99,7 +151,7 @@ Central Executor 模式
   这是服务器集中管理的主模式，速度快，执行链路短。
 
 Local Agent Executor 模式
-  用户本机或内网机器运行 Agent，复用本机 ~/.ssh/config 和 ssh-agent。
+  用户本机或内网机器运行 Local Agent Executor，复用本机 ~/.ssh/config 和 ssh-agent。
   这是私钥不出本机、主机无法直连内网机器时的补充模式。
 ```
 
@@ -118,7 +170,7 @@ ProjectPilot Desktop
 
 Backend URL:  http://主机后端地址
 Token:        ********
-Machine ID:   eddz-mac
+Executor ID:  eddz-mac-local
 Allowed Root: /Users/eddz/work
 Executor:     Central / Local Agent
 
@@ -142,11 +194,11 @@ Executor:     Central / Local Agent
 
 如果选择 Central Executor，主机后端所在机器负责保存或加载 SSH config，并集中连接多台服务器。
 
-如果选择 Local Agent Executor，本机 Agent 作为后台服务运行，负责本机检测、SSH 执行和权限边界。
+如果选择 Local Agent Executor，本机执行器作为后台服务运行，负责本机检测、SSH 执行和权限边界。
 
 ### 3.2 添加远程服务器
 
-桌面 GUI App、Central Executor 设置页或 Local Agent 设置页自动扫描：
+桌面 GUI App、Central Executor 设置页或 Local Agent Executor 设置页自动扫描：
 
 ```text
 ~/.ssh/config
@@ -415,7 +467,7 @@ AI 结果总结
 
 ## 5. 最终核心功能
 
-## 5.1 项目总览
+### 5.1 项目总览
 
 每个项目有一个总览页。
 
@@ -447,7 +499,7 @@ ProjectPilot
   prod-server   healthy
 ```
 
-## 5.2 Git 智能管理
+### 5.2 Git 智能管理
 
 最终 Git 能力要覆盖 Git 的完整能力面，而不是只覆盖 `pull / push / commit`。
 
@@ -547,7 +599,7 @@ AI 应该输出：
 - 是否允许 AI 修改冲突文件
 ```
 
-### 分支与合并能力分层
+#### 分支与合并能力分层
 
 只读分析能力：
 
@@ -609,7 +661,7 @@ git clean -fd
 
 这些操作只能作为风险解释和人工建议，不能由 AI 默认执行。
 
-### Git 安全规则
+#### Git 安全规则
 
 允许自动执行：
 
@@ -668,7 +720,7 @@ git rebase 公共分支
 
 ProjectPilot 对复杂 Git 操作的原则是：AI 可以分析、预演、生成计划和建议解决方案，但真实改变仓库历史或写入冲突文件前，必须获得用户批准。
 
-## 5.3 远程服务器管理
+### 5.3 远程服务器管理
 
 最终服务器能力：
 
@@ -708,7 +760,7 @@ Environment:
   Disk: 68%
 ```
 
-## 5.4 远程环境配置
+### 5.4 远程环境配置
 
 最终不是简单执行命令，而是 AI 生成配置计划。
 
@@ -752,7 +804,7 @@ AI 输出：
 
 用户确认后才执行中高风险步骤。
 
-## 5.5 Docker 智能管理
+### 5.5 Docker 智能管理
 
 Docker 也要覆盖完整能力面。
 
@@ -835,7 +887,7 @@ AI 应该输出：
 - 是否允许重启 app service
 ```
 
-### Docker 能力分层
+#### Docker 能力分层
 
 只读分析能力：
 
@@ -913,7 +965,7 @@ docker system prune -a --volumes
 
 ProjectPilot 对 Docker 的原则是：AI 可以做诊断、生成部署和修复计划，但任何可能停止服务、删除镜像/容器/卷、修改生产容器或覆盖镜像 tag 的操作，都必须经过用户批准。
 
-### Docker 重点管理对象
+#### Docker 重点管理对象
 
 ProjectPilot 需要把 Docker 拆成可以理解、可以入库、可以审批的对象。
 
@@ -1106,7 +1158,7 @@ Registry 需要理解：
 - image provenance；
 - 是否覆盖已有 tag。
 
-### Docker 后端数据模型
+#### Docker 后端数据模型
 
 Docker 能力不能只保存命令文本，必须保存结构化状态和执行证据。
 
@@ -1117,7 +1169,7 @@ DockerSnapshot
   id
   project_id
   server_id
-  machine_id
+  executor_id
   captured_at
   daemon_status
   docker_version
@@ -1227,7 +1279,7 @@ manual     需要人工处理
 none       不可回滚
 ```
 
-### Docker Executor 执行边界
+#### Docker Executor 执行边界
 
 Executor 执行 Docker 任务时必须校验：
 
@@ -1269,7 +1321,7 @@ docker_image_prune
 docker compose up -d app && rm -rf /
 ```
 
-### Docker 界面设计
+#### Docker 界面设计
 
 Docker 总览：
 
@@ -1347,7 +1399,7 @@ DockerPlan #81
 [批准执行] [编辑计划] [拒绝]
 ```
 
-### Docker 典型工作流
+#### Docker 典型工作流
 
 Docker Doctor：
 
@@ -1421,7 +1473,7 @@ AI 检查 healthcheck 和 logs
 AI 给出备份建议
 ```
 
-### Docker CLI 和 TUI
+#### Docker CLI 和 TUI
 
 最终 CLI：
 
@@ -1460,7 +1512,7 @@ prod-server  web           nginx        running
 [Enter] Detail   [l] Logs   [p] Plan   [a] Approve   [q] Quit
 ```
 
-## 5.6 AI 对话式运维
+### 5.6 AI 对话式运维
 
 最终用户可以直接问：
 
@@ -1499,7 +1551,7 @@ AI 继续说明：
 已同步到最新提交。现在 dev-server 与 origin/main 一致。
 ```
 
-## 5.7 审计和历史
+### 5.7 审计和历史
 
 所有操作都入库。
 
@@ -1528,7 +1580,7 @@ eddz 确认执行 dev-server git pull --ff-only
 提交：abc123 -> def456
 ```
 
-## 5.8 AI 计划审批与回滚中心
+### 5.8 AI 计划审批与回滚中心
 
 最终产品需要一个专门的计划审批界面。
 
@@ -1569,7 +1621,7 @@ ApprovedExecutionPlan
 
 Executor 只能执行这个已批准计划，不能临时扩展命令。
 
-### 5.8.1 执行时的保护机制
+#### 5.8.1 执行时的保护机制
 
 执行时必须满足：
 
@@ -1582,7 +1634,7 @@ Executor 只能执行这个已批准计划，不能临时扩展命令。
 - Executor 执行结果逐步上传；
 - 失败后停止后续高风险步骤。
 
-### 5.8.2 回滚入口
+#### 5.8.2 回滚入口
 
 执行历史页要显示：
 
@@ -1611,7 +1663,7 @@ Executor 执行回滚
 
 ## 6. 最终界面设计
 
-## 6.1 Web 前端
+### 6.1 Web 前端
 
 页面：
 
@@ -1625,7 +1677,7 @@ Operations
 Settings
 ```
 
-### Dashboard
+#### Dashboard
 
 展示全局状态：
 
@@ -1637,7 +1689,7 @@ Settings
 - 最近操作；
 - AI 风险提醒。
 
-### Projects
+#### Projects
 
 展示项目列表：
 
@@ -1647,7 +1699,7 @@ Blog API         healthy
 GPU Lab          blocked
 ```
 
-### Project Detail
+#### Project Detail
 
 展示：
 
@@ -1660,7 +1712,7 @@ GPU Lab          blocked
 - 待审批计划；
 - 最近回滚入口。
 
-### Servers
+#### Servers
 
 展示：
 
@@ -1670,7 +1722,7 @@ GPU Lab          blocked
 - 最近检测时间；
 - 环境状态。
 
-### AI Assistant
+#### AI Assistant
 
 对话式入口：
 
@@ -1680,7 +1732,7 @@ GPU Lab          blocked
 生成 dev-server 的环境修复计划。
 ```
 
-### Plans
+#### Plans
 
 展示 AI 计划和用户批准状态：
 
@@ -1695,7 +1747,7 @@ Plan #42  dev-server 环境修复
 [查看计划] [编辑计划] [批准执行] [拒绝]
 ```
 
-### Rollbacks
+#### Rollbacks
 
 展示可回滚历史：
 
@@ -1709,9 +1761,9 @@ Execution #18
 [查看历史] [生成回滚计划]
 ```
 
-## 6.2 桌面 GUI 主应用
+### 6.2 桌面 GUI 主应用
 
-桌面 GUI 主应用是 ProjectPilot 的本机图形化入口，不等于 Agent。
+桌面 GUI 主应用是 ProjectPilot 的本机图形化入口，不等于 Executor 本身。
 
 它面向：
 
@@ -1770,7 +1822,7 @@ Web 前端：适合团队共享、远程访问、浏览器打开。
 
 桌面 GUI App 可以管理 Central Executor 或 Local Agent Executor，但不能绕过后端审批和审计。
 
-## 6.3 Executor 执行器层
+### 6.3 Executor 执行器层
 
 Executor 执行器层不是主要业务前端，而是 AI 和服务器之间的“手”。
 
@@ -1826,7 +1878,7 @@ Recent Tasks:
 [Start Executor] [Stop Executor] [Scan SSH Config] [Test All] [Open Web]
 ```
 
-## 6.4 Rust TUI 终端端
+### 6.4 Rust TUI 终端端
 
 终端端不是简单 CLI，而是完整的交互式 TUI。
 
@@ -1905,7 +1957,7 @@ CLI 适合脚本和 CI。
 
 ## 7. 最终权限模型
 
-权限分三层。
+权限分四层。
 
 ### 7.1 用户权限
 
@@ -2217,7 +2269,7 @@ WebSocket / SSE 用于实时状态
 - 项目模块；
 - 服务器模块；
 - Executor 模块；
-- Agent 兼容模块；
+- 旧 Agent 兼容模块；
 - 任务模块；
 - AI 计划模块；
 - 审批模块；
@@ -2376,7 +2428,17 @@ projectpilot execution rollback exec_18
 
 ## 10. 最终版本路线
 
-## V1：个人可用版
+版本路线先按“能用 -> 安全执行 -> 复杂运维 -> 团队治理 -> 生产平台”推进。
+
+| 版本 | 目标 | 重点 |
+| --- | --- | --- |
+| V1 | 个人可用 | 桌面 GUI、Executor、SSH 扫描、只读检测 |
+| V2 | 安全执行 | Git/Docker 计划、审批、审计、快照 |
+| V3 | 复杂运维 | Git 分支协作、Docker Compose 运维、回滚建议 |
+| V4 | 团队协作 | 多用户、权限、团队审批、生产变更治理 |
+| V5 | 生产平台 | CI/CD、监控、自动巡检、多端一致 |
+
+### V1：个人可用版
 
 目标：
 
@@ -2399,7 +2461,7 @@ projectpilot execution rollback exec_18
 - 基础 Rust TUI 状态查看；
 - AI 总结。
 
-## V2：安全执行版
+### V2：安全执行版
 
 目标：
 
@@ -2430,7 +2492,7 @@ projectpilot execution rollback exec_18
 
 此阶段可以让 AI 解释 Git 分支关系、合并风险和 Docker 运行状态，但真实 `merge / rebase / cherry-pick`、容器重启、镜像构建和 Compose 变更仍只生成计划，不默认执行。
 
-## V3：环境配置版
+### V3：环境配置版
 
 目标：
 
@@ -2475,7 +2537,7 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - Docker volume 备份和清理建议；
 - 用户批准后执行中风险 Docker 操作。
 
-## V4：团队协作版
+### V4：团队协作版
 
 目标：
 
@@ -2501,7 +2563,7 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 生产容器变更审批；
 - 镜像 registry 权限策略。
 
-## V5：生产平台版
+### V5：生产平台版
 
 目标：
 
