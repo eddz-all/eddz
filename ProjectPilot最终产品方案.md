@@ -25,26 +25,27 @@ AI 建议我下一步做什么？
 
 ## 2. 最终产品形态
 
-ProjectPilot 最终由五个部分组成：
+ProjectPilot 最终由六个部分组成：
 
 ```text
 1. Web 前端
-2. 主机后端 + 数据库 + AI
-3. macOS / Windows / Linux 本机 Agent App
-4. Rust TUI 终端交互端
-5. 远程服务器 SSH 执行层
+2. macOS / Windows / Linux 桌面 GUI 主应用
+3. Rust TUI 终端交互端 + CLI 脚本入口
+4. 主机后端 + 数据库 + AI
+5. 本机 Agent 服务 / 执行器
+6. 远程服务器 SSH 执行层
 ```
 
 整体结构：
 
 ```text
-┌──────────────────────┐      ┌──────────────────────┐
-│       Web 前端        │      │      Rust TUI         │
-│ 项目 / 服务器 / AI 对话 │      │ 审批 / 编辑 / 回滚     │
-└───────────┬──────────┘      └───────────┬──────────┘
-            │                             │
-            └──────────────┬──────────────┘
-                           ▼
+┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+│       Web 前端        │  │    桌面 GUI 主应用     │  │   Rust TUI / CLI      │
+│ 团队控制台 / 浏览器入口 │  │ 本机桌面入口 / 原生体验 │  │ 终端审批 / 自动化脚本   │
+└───────────┬──────────┘  └───────────┬──────────┘  └───────────┬──────────┘
+            │                         │                         │
+            └─────────────────────────┼─────────────────────────┘
+                                      ▼
 ┌──────────────────────────────┐
 │     主机后端 / 数据库 / AI      │
 │ 任务调度 / 权限 / 审计 / 分析    │
@@ -52,8 +53,8 @@ ProjectPilot 最终由五个部分组成：
                 │ 轮询任务 / 上传结果
                 ▼
 ┌──────────────────────────────┐
-│       本机 ProjectPilot App    │
-│ SSH 配置 / 私钥 / Agent 执行器  │
+│       本机 Agent 服务 / 执行器   │
+│ SSH 配置 / 私钥 / 本机权限边界   │
 └───────────────┬──────────────┘
                 │ SSH
                 ▼
@@ -63,25 +64,25 @@ ProjectPilot 最终由五个部分组成：
 └──────────────────────────────┘
 ```
 
-Web 前端和 Rust TUI 都是操作入口：Web 适合图形化总览，TUI 适合终端里的审批、编辑计划、执行和回滚。两者调用同一个后端和同一套权限/审计/计划模型。
+Web 前端、桌面 GUI 主应用、Rust TUI 和 CLI 都是操作入口。Web 适合团队和浏览器访问，桌面 GUI App 适合个人日常本机使用，TUI 适合终端里的审批、编辑计划、执行和回滚，CLI 适合脚本化。它们调用同一个后端和同一套权限/审计/计划模型。
 
 ## 3. 用户最终怎么使用
 
 ### 3.1 第一次使用
 
-用户安装 ProjectPilot App。
+用户安装 ProjectPilot Desktop App。
 
 打开后看到原生桌面窗口：
 
 ```text
-ProjectPilot Agent
+ProjectPilot Desktop
 
 Backend URL:  http://主机后端地址
 Token:        ********
 Machine ID:   eddz-mac
 Allowed Root: /Users/eddz/work
 
-[连接主机] [扫描 SSH 配置] [测试连接]
+[连接主机] [启动本机 Agent] [扫描 SSH 配置] [进入控制台]
 ```
 
 用户只需要做三件事：
@@ -96,9 +97,11 @@ Allowed Root: /Users/eddz/work
 连接主机
 ```
 
+桌面 GUI 主应用连接成功后，用户看到的是完整项目控制台；本机 Agent 作为后台服务运行，负责本机检测、SSH 执行和权限边界。
+
 ### 3.2 添加远程服务器
 
-App 自动扫描：
+桌面 GUI App 或 Agent 设置页自动扫描：
 
 ```text
 ~/.ssh/config
@@ -124,7 +127,7 @@ ProjectPilot 使用本机 SSH 配置测试，不上传私钥。
 
 ### 3.3 绑定项目
 
-在 Web 前端或 App 中绑定：
+在 Web 前端、桌面 GUI App 或 TUI 中绑定：
 
 ```text
 项目：ProjectPilot
@@ -136,7 +139,7 @@ Git remote：git@example.com:team/projectpilot.git
 
 ### 3.4 日常使用
 
-用户打开 Web 前端看到：
+用户打开 Web 前端或桌面 GUI App 看到：
 
 ```text
 ProjectPilot
@@ -1114,9 +1117,69 @@ Execution #18
 [查看历史] [生成回滚计划]
 ```
 
-## 6.2 桌面 Agent App
+## 6.2 桌面 GUI 主应用
 
-桌面 App 不是主要业务前端，而是本机执行控制器。
+桌面 GUI 主应用是 ProjectPilot 的本机图形化入口，不等于 Agent。
+
+它面向：
+
+- 不想每次打开浏览器的个人用户；
+- 需要本机原生窗口、菜单、通知和托盘状态的用户；
+- 需要同时管理本机项目和远程服务器的开发者；
+- 希望把 Agent 配置、项目控制台和审批中心放在一个桌面应用里的用户。
+
+桌面 GUI 主应用负责：
+
+- 登录主机后端；
+- 展示项目总览；
+- 展示 Git / Docker / 环境状态；
+- 展示 AI 对话；
+- 展示计划审批中心；
+- 展示执行历史和回滚入口；
+- 管理本机 Agent 的启动、停止和状态；
+- 管理 SSH Host 扫描和连接测试；
+- 通过系统通知提醒高风险审批；
+- 在本机安全地打开项目目录、终端或日志文件。
+
+最终桌面 GUI 主应用窗口：
+
+```text
+ProjectPilot Desktop
+
+Sidebar:
+  Dashboard
+  Projects
+  Servers
+  Git
+  Docker
+  Plans
+  History
+  Settings
+
+Main:
+  ProjectPilot              attention
+  dev-server                Docker healthy / Git behind 2
+  prod-server               healthy
+
+Agent:
+  eddz-mac                  running
+  Allowed Root              /Users/eddz/work
+
+[Ask AI] [Detect All] [Review Plans] [Open Agent Settings]
+```
+
+桌面 GUI App 和 Web 前端展示同一套业务数据，但体验不同：
+
+```text
+Web 前端：适合团队共享、远程访问、浏览器打开。
+桌面 GUI App：适合个人日常使用、本机通知、本机 Agent 管理。
+```
+
+桌面 GUI App 可以内置或启动本机 Agent，但不能绕过后端审批和审计。
+
+## 6.3 本机 Agent App / Agent 服务
+
+本机 Agent App / Agent 服务不是主要业务前端，而是本机执行控制器。
 
 它负责：
 
@@ -1150,7 +1213,7 @@ Recent Tasks:
 [Start Agent] [Stop Agent] [Scan SSH Config] [Open Web]
 ```
 
-## 6.3 Rust TUI 终端端
+## 6.4 Rust TUI 终端端
 
 终端端不是简单 CLI，而是完整的交互式 TUI。
 
@@ -1217,10 +1280,10 @@ Rollback preparation:
 [a] Approve   [e] Edit   [d] Delete Step   [m] Modify   [q] Back
 ```
 
-TUI 与 GUI 的关系：
+TUI 与桌面 GUI App 的关系：
 
 ```text
-GUI 适合看全局、配置 Agent、团队管理。
+桌面 GUI App 适合看全局、配置 Agent、接收本机通知。
 TUI 适合终端里快速处理计划、审批、执行、回滚。
 CLI 适合脚本和 CI。
 ```
@@ -1511,14 +1574,42 @@ WebSocket / SSE 用于实时状态
 - AI 分析模块；
 - 权限模块。
 
-### 9.2 Agent App
+### 9.2 桌面 GUI 主应用
 
 推荐：
 
 ```text
 macOS: SwiftUI 原生 App
-Windows: 后续可做 Tauri / .NET / Electron
-Linux: 后续可做 Tauri / AppImage
+Windows: Tauri / .NET / Electron
+Linux: Tauri / AppImage / Flatpak
+```
+
+第一版可以先做 macOS SwiftUI，因为当前用户环境在 macOS，且需要原生窗口、系统通知、菜单栏和本机 Agent 管理。
+
+桌面 GUI 主应用通过后端 API 获取数据，不直接操作远程服务器。真实执行仍然由后端创建任务、本机 Agent 拉取任务并执行。
+
+桌面 GUI 主应用需要包含：
+
+- 登录和后端连接；
+- 项目总览；
+- Git 全功能控制台；
+- Docker 全功能控制台；
+- AI 对话；
+- 计划审批；
+- 执行历史；
+- 回滚入口；
+- Agent 状态；
+- SSH Host 管理；
+- 设置页。
+
+### 9.3 本机 Agent 设置窗口 / Agent 服务
+
+推荐：
+
+```text
+macOS: LaunchAgent + SwiftUI 设置窗口
+Windows: 后台 Service + 托盘设置窗口
+Linux: systemd user service + Tauri/AppImage 设置窗口
 ```
 
 当前 macOS 版本：
@@ -1530,7 +1621,9 @@ SwiftUI 窗口
 使用系统 ssh
 ```
 
-### 9.3 Rust TUI
+Agent 服务可以被桌面 GUI 主应用启动和管理，也可以独立运行。
+
+### 9.4 Rust TUI
 
 终端交互端使用 Rust 实现。
 
@@ -1553,7 +1646,7 @@ tokio
 - 键盘交互体验好；
 - 跨平台能力强；
 - 与服务器环境兼容度高；
-- 可以和 GUI / 后端共享同一套 HTTP 协议。
+- 可以和桌面 GUI App / 后端共享同一套 HTTP 协议。
 
 TUI 不直接绕过后端执行命令。
 
@@ -1581,7 +1674,7 @@ SSH 执行器
 审计日志
 ```
 
-### 9.4 CLI
+### 9.5 CLI
 
 CLI 仍然需要保留，但定位不同。
 
@@ -1602,7 +1695,7 @@ projectpilot plan approve plan_42
 projectpilot execution rollback exec_18
 ```
 
-### 9.5 SSH 执行
+### 9.6 SSH 执行
 
 推荐：
 
@@ -1626,7 +1719,8 @@ projectpilot execution rollback exec_18
 
 能力：
 
-- macOS App；
+- macOS 桌面 GUI 主应用；
+- 本机 Agent 服务；
 - 后端连接；
 - SSH Host 扫描；
 - 连接测试；
@@ -1759,7 +1853,8 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 部署前检查；
 - 回滚建议；
 - 多平台 Agent；
-- GUI / CLI / TUI 三端一致；
+- 多平台桌面 GUI App；
+- Web / 桌面 GUI / CLI / TUI 四端一致；
 - Rust TUI 跨平台分发。
 
 ## 11. 最终产品边界
@@ -1797,7 +1892,7 @@ ProjectPilot 不应该做：
 最终 ProjectPilot 应该做成：
 
 ```text
-一个带桌面 Agent、Web 控制台和 Rust TUI 的 AI 项目控制台。
+一个同时提供 Web 控制台、桌面 GUI App、Rust TUI、CLI 和本机 Agent 的 AI 项目控制台。
 ```
 
 用户感受到的是：
@@ -1815,15 +1910,16 @@ AI 生成的计划我可以直接批准，也可以修改后再批准。
 
 ```text
 Web 前端负责展示
+桌面 GUI App 负责本机图形化使用、通知和 Agent 管理
 Rust TUI 负责终端交互、计划审批和回滚入口
 CLI 负责脚本化自动化
 后端负责调度、存储、权限、AI
-桌面 Agent 负责本机权限和 SSH 执行
+本机 Agent 服务负责本机权限和 SSH 执行
 远程服务器只接受受控任务
 ```
 
 一句话终局：
 
 ```text
-ProjectPilot = AI 大脑 + 项目数据库 + 桌面 Agent + Rust TUI + SSH 执行器 + Git/Docker/环境安全控制台。
+ProjectPilot = AI 大脑 + 项目数据库 + Web 控制台 + 桌面 GUI App + Rust TUI + CLI + 本机 Agent + SSH 执行器 + Git/Docker/环境安全控制台。
 ```
