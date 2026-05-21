@@ -25,24 +25,26 @@ AI 建议我下一步做什么？
 
 ## 2. 最终产品形态
 
-ProjectPilot 最终由四个部分组成：
+ProjectPilot 最终由五个部分组成：
 
 ```text
 1. Web 前端
 2. 主机后端 + 数据库 + AI
 3. macOS / Windows / Linux 本机 Agent App
-4. 远程服务器 SSH 执行层
+4. Rust TUI 终端交互端
+5. 远程服务器 SSH 执行层
 ```
 
 整体结构：
 
 ```text
-┌──────────────────────────────┐
-│           Web 前端            │
-│ 项目面板 / 服务器面板 / AI 对话 │
-└───────────────┬──────────────┘
-                │
-                ▼
+┌──────────────────────┐      ┌──────────────────────┐
+│       Web 前端        │      │      Rust TUI         │
+│ 项目 / 服务器 / AI 对话 │      │ 审批 / 编辑 / 回滚     │
+└───────────┬──────────┘      └───────────┬──────────┘
+            │                             │
+            └──────────────┬──────────────┘
+                           ▼
 ┌──────────────────────────────┐
 │     主机后端 / 数据库 / AI      │
 │ 任务调度 / 权限 / 审计 / 分析    │
@@ -60,6 +62,8 @@ ProjectPilot 最终由四个部分组成：
 │ Git / Docker / 环境 / 项目进程  │
 └──────────────────────────────┘
 ```
+
+Web 前端和 Rust TUI 都是操作入口：Web 适合图形化总览，TUI 适合终端里的审批、编辑计划、执行和回滚。两者调用同一个后端和同一套权限/审计/计划模型。
 
 ## 3. 用户最终怎么使用
 
@@ -815,6 +819,83 @@ Recent Tasks:
 [Start Agent] [Stop Agent] [Scan SSH Config] [Open Web]
 ```
 
+## 6.3 Rust TUI 终端端
+
+终端端不是简单 CLI，而是完整的交互式 TUI。
+
+它面向：
+
+- 长期在终端工作的开发者；
+- 不方便打开 GUI 的服务器环境；
+- 需要键盘快速审批计划的高级用户；
+- 希望在 SSH session 里管理项目状态的用户。
+
+入口：
+
+```bash
+projectpilot-tui
+```
+
+或：
+
+```bash
+projectpilot tui
+```
+
+TUI 负责：
+
+- 查看项目状态；
+- 查看服务器状态；
+- 查看 AI 计划；
+- 编辑 AI 计划；
+- 批准 / 拒绝计划；
+- 执行已批准计划；
+- 查看执行历史；
+- 生成回滚计划；
+- 批准回滚。
+
+终端主界面：
+
+```text
+ProjectPilot
+────────────────────────────────────────────────────────
+Projects           Servers            Plans
+
+ProjectPilot       dev-server         Plan #42 waiting
+Blog API           prod-server        healthy
+GPU Lab            gpu-lab            blocked
+
+[Enter] View   [a] Approve   [e] Edit   [r] Rollback   [q] Quit
+```
+
+AI 计划审批界面：
+
+```text
+AI Plan #42: Sync dev-server
+────────────────────────────────────────────────────────
+1. git fetch                         low
+2. git pull --ff-only                medium
+3. npm install                       medium
+4. docker compose restart app        high
+
+Rollback preparation:
+- before_commit: abc123
+- backup package-lock.json
+- capture docker state
+
+[a] Approve   [e] Edit   [d] Delete Step   [m] Modify   [q] Back
+```
+
+TUI 与 GUI 的关系：
+
+```text
+GUI 适合看全局、配置 Agent、团队管理。
+TUI 适合终端里快速处理计划、审批、执行、回滚。
+CLI 适合脚本和 CI。
+```
+
+三者必须复用同一套后端 API、计划模型、权限模型和审计模型，不能各自实现一套执行逻辑。
+
 ## 7. 最终权限模型
 
 权限分三层。
@@ -1036,7 +1117,79 @@ SwiftUI 窗口
 使用系统 ssh
 ```
 
-### 9.3 SSH 执行
+### 9.3 Rust TUI
+
+终端交互端使用 Rust 实现。
+
+推荐技术栈：
+
+```text
+Rust
+ratatui
+crossterm
+reqwest
+serde
+tokio
+```
+
+选择 Rust 的原因：
+
+- 单文件二进制，方便分发；
+- 终端 UI 性能稳定；
+- 适合长时间运行；
+- 键盘交互体验好；
+- 跨平台能力强；
+- 与服务器环境兼容度高；
+- 可以和 GUI / 后端共享同一套 HTTP 协议。
+
+TUI 不直接绕过后端执行命令。
+
+TUI 应该调用：
+
+```text
+GET /projects
+GET /servers
+GET /plans
+POST /plans/{plan_id}/approve
+POST /plans/{plan_id}/reject
+PATCH /plans/{plan_id}
+POST /executions/{execution_id}/rollback-plan
+```
+
+执行仍然走：
+
+```text
+后端审批记录
+  ↓
+Agent 轮询
+  ↓
+SSH 执行器
+  ↓
+审计日志
+```
+
+### 9.4 CLI
+
+CLI 仍然需要保留，但定位不同。
+
+CLI 适合：
+
+- 脚本化；
+- CI；
+- 快速查询；
+- 非交互命令；
+- 自动化接入。
+
+示例：
+
+```bash
+projectpilot git doctor .
+projectpilot agent connect
+projectpilot plan approve plan_42
+projectpilot execution rollback exec_18
+```
+
+### 9.5 SSH 执行
 
 推荐：
 
@@ -1068,6 +1221,7 @@ SwiftUI 窗口
 - 远程 Git 检测；
 - 远程环境检测；
 - Web 状态展示；
+- 基础 Rust TUI 状态查看；
 - AI 总结。
 
 ## V2：安全执行版
@@ -1090,7 +1244,9 @@ SwiftUI 窗口
 - 基础回滚计划；
 - 风险分级；
 - 用户确认；
-- 操作前后状态对比。
+- 操作前后状态对比；
+- TUI 计划审批与编辑；
+- TUI 执行历史查看。
 
 ## V3：环境配置版
 
@@ -1109,7 +1265,9 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 环境修复计划；
 - 中风险步骤确认执行；
 - 高风险步骤强确认；
-- 失败后生成回滚建议。
+- 失败后生成回滚建议；
+- TUI 环境修复计划审批；
+- TUI 回滚计划确认。
 
 ## V4：团队协作版
 
@@ -1127,7 +1285,9 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 服务器权限；
 - 操作审批；
 - 审计日志；
-- 团队 AI 报告。
+- 团队 AI 报告；
+- 多用户 TUI 登录；
+- 团队审批视图。
 
 ## V5：生产平台版
 
@@ -1146,7 +1306,9 @@ AI 能生成远程环境修复计划，并执行低/中风险步骤。
 - 自动健康巡检；
 - 部署前检查；
 - 回滚建议；
-- 多平台 Agent。
+- 多平台 Agent；
+- GUI / CLI / TUI 三端一致；
+- Rust TUI 跨平台分发。
 
 ## 11. 最终产品边界
 
@@ -1157,6 +1319,7 @@ ProjectPilot 应该做：
 - 帮用户生成安全操作计划；
 - 帮用户执行被允许、被确认的计划版本；
 - 支持用户修改 AI 计划后再执行；
+- 提供 Web / GUI / CLI / TUI 多入口，且共享同一套后端权限和审计；
 - 保存执行前后快照；
 - 为可回滚操作提供回滚入口；
 - 帮团队追踪所有历史。
@@ -1178,7 +1341,7 @@ ProjectPilot 不应该做：
 最终 ProjectPilot 应该做成：
 
 ```text
-一个带桌面 Agent 的 AI 项目控制台。
+一个带桌面 Agent、Web 控制台和 Rust TUI 的 AI 项目控制台。
 ```
 
 用户感受到的是：
@@ -1196,6 +1359,8 @@ AI 生成的计划我可以直接批准，也可以修改后再批准。
 
 ```text
 Web 前端负责展示
+Rust TUI 负责终端交互、计划审批和回滚入口
+CLI 负责脚本化自动化
 后端负责调度、存储、权限、AI
 桌面 Agent 负责本机权限和 SSH 执行
 远程服务器只接受受控任务
@@ -1204,5 +1369,5 @@ Web 前端负责展示
 一句话终局：
 
 ```text
-ProjectPilot = AI 大脑 + 项目数据库 + 桌面 Agent + SSH 执行器 + Git/环境安全控制台。
+ProjectPilot = AI 大脑 + 项目数据库 + 桌面 Agent + Rust TUI + SSH 执行器 + Git/环境安全控制台。
 ```
