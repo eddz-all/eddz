@@ -2,23 +2,23 @@
 
 ## 0. 阅读指南
 
-这篇文档是 `ProjectPilot最终产品方案.md` 的执行层补充文档，专门解释：
+这篇文档只讲一件事：
 
 ```text
 主机 AI 如何通过 Executor 管理多台 SSH 服务器。
 ```
 
-它不再定义完整产品形态；完整产品形态以 `ProjectPilot最终产品方案.md` 为准。
+完整产品形态看 `ProjectPilot最终产品方案.md`，本文只补执行层。先记住最终决定：
 
-本文重点回答：
-
-```text
-Executor 怎么读取 SSH config？
-Central Executor 和 Local Executor 怎么选？
-主机后端、AI、数据库、Executor 分别做什么？
-哪些命令可以执行，哪些必须审批？
-执行结果怎么入库、审计和回滚？
-```
+| 问题 | 决定 |
+| --- | --- |
+| 谁执行命令 | Executor，不是 AI Planner |
+| 主模式 | Central Executor，部署在主机后端侧 |
+| 补充模式 | Local Executor，部署在用户本机或内网机器 |
+| SSH 配置 | Executor 读取所在机器的 `~/.ssh/config` 或后端托管 Host 配置 |
+| 私钥 | 不交给 AI Planner；Local Executor 优先走系统 `ssh-agent` / Keychain |
+| 接口 | 只保留 `/executor/poll` 和 `/executor/tasks/{task_id}/result` |
+| 执行边界 | 白名单命令、路径限制、审批、审计、快照、可回滚优先 |
 
 推荐阅读顺序：
 
@@ -29,8 +29,7 @@ Central Executor 和 Local Executor 怎么选？
 5. SSH 连接方案
 6. Executor 任务模式
 12. 安全设计
-15. 阶段计划
-17. 最终结论
+15. 执行计划
 ```
 
 ## 1. 目标
@@ -1155,128 +1154,47 @@ Docker 已安装但未运行。
 建议先启动 Docker，再执行 git pull --ff-only。
 ```
 
-## 15. 阶段计划
+## 15. 执行计划
 
-### 阶段 1：Local Executor 与本地检测
+先做能闭环的最小版本，再逐步放开写操作。
 
-已完成 / 当前能力：
+| 阶段 | 目标 | 必做 | 验收点 |
+| --- | --- | --- | --- |
+| 1. 本地闭环 | Local Executor 能连后端并上报本机状态 | 后端地址/token、`executor_id`、本地 Git/环境检测、`/executor/poll`、`/executor/tasks/{task_id}/result` | 后端能看到 Executor 在线和检测结果 |
+| 2. SSH 管理 | 能从 Executor 所在机器读取 SSH Host | 扫描 `~/.ssh/config`、`ssh -G` 展开配置、连接测试、Host 别名入库、不上传私钥 | 前端能列出服务器并测试连接 |
+| 3. 远程只读检测 | 能看清远程项目状态 | `check_connection`、`detect_remote_git_status`、`detect_remote_environment`、超时控制、stdout/stderr 结构化 | 后端能展示远程 Git 和环境快照 |
+| 4. 安全 Git 执行 | 低风险 Git 操作可审批执行 | `git_fetch`、`git_pull_ff_only`、`git_push_safe`、dirty/diverged/conflict 阻断、审计日志 | 用户批准后执行成功，失败可解释 |
+| 5. 环境配置计划 | AI 生成修复计划，Executor 只执行已批准步骤 | 命令风险分类、白名单、用户确认、中风险受控执行、高风险默认禁止 | 每一步有计划、审批、结果、审计 |
+| 6. 产品化 | 变成稳定可用的执行层 | 常驻服务、开机自启、实时通知、多服务器总览、日志面板、权限分级 | 可以长期运行并支撑团队使用 |
 
-- 本地 Git 检测；
-- 本地环境检测；
-- Local Executor 轮询；
-- macOS 原生窗口；
-- 后端 poll/result 协议雏形。
+MVP 只保留四块：
 
-### 阶段 2：SSH Host 管理
+| 模块 | 范围 |
+| --- | --- |
+| macOS Desktop App | 填后端地址和 token、扫描 SSH config、选择 Host、测试连接、启动 Local Executor |
+| 后端 | `/executor/poll`、`/executor/tasks/{task_id}/result`、创建连接/Git/环境检测任务 |
+| Executor | `check_connection`、`detect_remote_git_status`、`detect_remote_environment` |
+| 前端 | 服务器列表、检测按钮、Git 状态、环境状态 |
 
-要做：
-
-- 扫描 `~/.ssh/config`;
-- 展示 Host 列表；
-- 使用 `ssh -G` 展开配置；
-- 测试连接；
-- 保存服务器别名到后端；
-- 不上传私钥。
-
-### 阶段 3：远程只读检测
-
-要做：
-
-- `check_connection`;
-- `detect_remote_git_status`;
-- `detect_remote_environment`;
-- 远程命令超时；
-- stdout/stderr 解析；
-- 结果上传后端。
-
-### 阶段 4：Git 安全操作
-
-要做：
-
-- `git_fetch`;
-- `git_pull_ff_only`;
-- `git_push_safe`;
-- dirty / diverged / conflict 阻断；
-- 操作审计。
-
-### 阶段 5：远程环境配置计划
-
-要做：
-
-- AI 生成配置计划；
-- 命令风险分类；
-- 用户确认；
-- 中风险命令受控执行；
-- 高风险命令默认禁止。
-
-### 阶段 6：正式产品化
-
-要做：
-
-- 菜单栏常驻；
-- 开机自启动；
-- 后端任务实时通知；
-- 多服务器状态总览；
-- 日志面板；
-- 错误修复建议；
-- 权限分级；
-- 团队协作。
-
-## 16. 推荐 MVP
-
-最小可行版本只做：
-
-```text
-macOS Desktop App
-  - 填后端地址和 token
-  - 扫描 ~/.ssh/config
-  - 选择服务器 Host
-  - 测试连接
-  - 启动 Local Executor
-
-后端
-  - /executor/poll
-  - /executor/tasks/{task_id}/result
-  - 创建 check_connection / detect_git / detect_environment 任务
-
-Executor
-  - check_connection
-  - detect_remote_git_status
-  - detect_remote_environment
-
-前端
-  - 服务器列表
-  - 检测按钮
-  - Git 状态展示
-  - 环境状态展示
-```
-
-## 17. 最终结论
-
-这个方案可行。
-
-推荐架构是：
-
-```text
-AI Planner = 决策大脑
-后端 = 神经系统、任务调度、权限、审批
-数据库 = 历史记录、快照、审计证据
-Executor = 手，负责 SSH 连接和命令执行
-远程服务器 = 被检测、被配置和被部署的对象
-```
-
-Central Executor 是主模式，用于主机集中管理多台服务器。
-
-Local Executor 是补充模式，用于私钥不出本机、主机无法直连内网服务器的场景。
-
-这样既能实现“主机 AI 统一管理所有服务器”，又不会让 AI Planner 自由读取私钥或无限制执行 shell。
-
-第一阶段应坚持：
+底线：
 
 ```text
 只读检测优先
 白名单任务优先
-本机私钥不上传
+私钥不交给 AI Planner
 危险操作不自动执行
 所有操作可审计
 ```
+
+## 16. 最终结论
+
+方案可行。最终执行层就是：
+
+```text
+AI Planner 负责计划
+后端负责调度、权限和审批
+数据库负责历史、快照和审计
+Executor 负责 SSH 连接和命令执行
+```
+
+Central Executor 是主模式，Local Executor 是补充模式。这样既能让主机 AI 统一管理服务器，又不会让 AI Planner 自由读取私钥或无限制执行 shell。

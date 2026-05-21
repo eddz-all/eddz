@@ -2,42 +2,19 @@
 
 ## 0. 阅读指南
 
-这篇文档是 ProjectPilot 的总方案，是所有后续设计和开发的主线文档。
-
-如果只想快速理解最终成品，先读：
-
-```text
-0. 阅读指南
-1. 一句话定位
-2. 最终产品形态
-12. 最终结论
-```
-
-如果要拆开发任务，再读：
-
-```text
-5. 最终核心功能
-6. 最终界面设计
-8. 最终数据流
-9. 最终技术选型
-10. 最终版本路线
-```
-
-如果要做后端和执行层，重点读：
-
-```text
-2. 最终产品形态
-7. 最终权限模型
-8.8 Central Executor 执行链路
-9.1 后端
-9.3 Executor 执行器
-```
-
-本文的核心结论：
+这篇文档是 ProjectPilot 的总方案。先记住一句话：
 
 ```text
 ProjectPilot = AI 决策大脑 + 后端神经系统 + 数据库历史记录 + Executor 执行器 + 多端用户入口。
 ```
+
+阅读顺序：
+
+| 目的 | 先读 |
+| --- | --- |
+| 快速理解最终产品 | 1、2、12 |
+| 拆开发任务 | 5、6、8、9、10 |
+| 做后端和执行层 | 7、8.8、9.1、9.3 |
 
 几个词的固定含义：
 
@@ -51,6 +28,17 @@ ProjectPilot = AI 决策大脑 + 后端神经系统 + 数据库历史记录 + Ex
 | 桌面 GUI App | 本机图形化入口、通知、Executor 管理 | 不绕过后端审批 |
 | Rust TUI | 终端里的交互式入口 | 不直接拼接危险命令 |
 | CLI | 脚本化和 CI 入口 | 不替代审批模型 |
+
+当前最终决定：
+
+| 问题 | 决定 |
+| --- | --- |
+| 主模式 | Central Executor 集中管理服务器 |
+| 补充模式 | Local Executor 处理私钥不出本机、内网不可达场景 |
+| AI 能不能直接敲命令 | 不能，必须先生成计划，用户批准后由 Executor 执行 |
+| Git 范围 | 覆盖 status、branch、merge、rebase、cherry-pick、push、pull、冲突解释和回滚建议 |
+| Docker 范围 | 覆盖 daemon、image、container、compose、logs、build、restart、volume、network、registry |
+| 用户入口 | Web、桌面 GUI、Rust TUI、CLI 共用同一套后端、权限和审计 |
 
 ## 1. 一句话定位
 
@@ -2427,164 +2415,25 @@ projectpilot execution rollback exec_18
 
 ## 10. 最终版本路线
 
-版本路线先按“能用 -> 安全执行 -> 复杂运维 -> 团队治理 -> 生产平台”推进。
+路线按“先看清 -> 再执行 -> 再复杂协作 -> 再团队化 -> 再平台化”推进。
 
-| 版本 | 目标 | 重点 |
-| --- | --- | --- |
-| V1 | 个人可用 | 桌面 GUI、Executor、SSH 扫描、只读检测 |
-| V2 | 安全执行 | Git/Docker 计划、审批、审计、快照 |
-| V3 | 复杂运维 | Git 分支协作、Docker Compose 运维、回滚建议 |
-| V4 | 团队协作 | 多用户、权限、团队审批、生产变更治理 |
-| V5 | 生产平台 | CI/CD、监控、自动巡检、多端一致 |
+| 版本 | 目标 | 必做范围 | 暂不做 |
+| --- | --- | --- | --- |
+| V1 个人可用 | 一个人能看清本机和远程项目状态 | 桌面 GUI、Central Executor、Local Executor、SSH 扫描、连接测试、本地/远程 Git 检测、远程环境检测、基础 Web 展示、AI 总结 | 自动修改代码、自动部署、复杂 Git 操作 |
+| V2 安全执行 | 用户批准后执行低风险操作 | `git fetch`、`pull --ff-only`、安全 `push`、Docker 只读检测、AI 计划审批、用户编辑计划、执行前后快照、审计、基础回滚建议、TUI 审批 | `merge/rebase/cherry-pick` 自动执行、容器重启、镜像构建、Compose 变更 |
+| V3 复杂运维 | AI 能处理复杂 Git、Docker、环境问题 | merge/rebase/cherry-pick 计划、worktree 预演、冲突解释、Dockerfile/Compose 分析、logs 分析、build/pull/restart 计划、环境修复计划、中风险确认执行 | 无审批高风险操作、生产变更自动执行 |
+| V4 团队协作 | 团队共同管理项目和服务器 | 多用户、多角色、项目权限、服务器权限、团队审批、PR/MR 摘要、受保护分支策略、生产容器审批、registry 权限 | 跨组织平台化、自动巡检闭环 |
+| V5 生产平台 | 成为团队级 AI DevOps 控制台 | CI/CD、GitHub/GitLab、监控告警、自动健康巡检、部署前检查、多平台 Executor、多平台桌面 App、Web/GUI/CLI/TUI 一致 | 无边界自动运维 |
 
-### V1：个人可用版
-
-目标：
+最短落地顺序：
 
 ```text
-一个人可以用 ProjectPilot 管理自己的本机项目和远程服务器。
+V1 只读看清楚
+V2 低风险可执行
+V3 复杂操作先计划后执行
+V4 团队审批
+V5 生产平台化
 ```
-
-能力：
-
-- macOS 桌面 GUI 主应用；
-- Central Executor；
-- Local Executor；
-- 后端连接；
-- SSH Host 扫描；
-- 连接测试；
-- 本地 Git 检测；
-- 远程 Git 检测；
-- 远程环境检测；
-- Web 状态展示；
-- 基础 Rust TUI 状态查看；
-- AI 总结。
-
-### V2：安全执行版
-
-目标：
-
-```text
-允许用户确认后执行安全 Git 操作。
-```
-
-能力：
-
-- git fetch；
-- git pull --ff-only；
-- git push safe；
-- Git 全功能状态识别；
-- branch / merge-base / 分支差异分析；
-- 分支分叉解释；
-- Docker daemon / image / container / compose 只读检测；
-- Docker 基础故障解释；
-- AI 计划审批；
-- 用户编辑计划；
-- 远程操作审计；
-- 执行前后快照；
-- 基础回滚计划；
-- 风险分级；
-- 用户确认；
-- 操作前后状态对比；
-- TUI 计划审批与编辑；
-- TUI 执行历史查看。
-
-此阶段可以让 AI 解释 Git 分支关系、合并风险和 Docker 运行状态，但真实 `merge / rebase / cherry-pick`、容器重启、镜像构建和 Compose 变更仍只生成计划，不默认执行。
-
-### V3：环境配置版
-
-目标：
-
-```text
-AI 能生成远程环境修复计划，并执行低/中风险步骤。
-```
-
-能力：
-
-- Node / Python / Docker 检测；
-- 依赖安装建议；
-- Docker Compose 检查；
-- Dockerfile / compose.yaml 分析；
-- container logs 分析；
-- image build / pull 计划；
-- compose up / restart service 计划；
-- Docker network / volume 风险分析；
-- 配置文件缺失检查；
-- 环境修复计划；
-- 中风险步骤确认执行；
-- 高风险步骤强确认；
-- 失败后生成回滚建议；
-- TUI 环境修复计划审批；
-- TUI 回滚计划确认。
-
-同时补齐智能 Git 复杂协作能力：
-
-- merge plan；
-- rebase plan；
-- cherry-pick plan；
-- 临时 worktree 合并预演；
-- 冲突文件解释；
-- AI 冲突解决建议；
-- 用户批准后应用冲突解决 patch。
-
-同时补齐 Docker 复杂运维能力：
-
-- Docker 部署计划；
-- Docker 容器修复计划；
-- Docker 镜像构建计划；
-- Docker Compose 服务更新计划；
-- Docker volume 备份和清理建议；
-- 用户批准后执行中风险 Docker 操作。
-
-### V4：团队协作版
-
-目标：
-
-```text
-一个团队可以共同管理多个项目和服务器。
-```
-
-能力：
-
-- 多用户；
-- 多角色；
-- 项目权限；
-- 服务器权限；
-- 操作审批；
-- 审计日志；
-- 团队 AI 报告；
-- 多用户 TUI 登录；
-- 团队审批视图；
-- PR / MR 摘要生成；
-- 团队合并审批；
-- 受保护分支策略；
-- 团队 Docker 操作审批；
-- 生产容器变更审批；
-- 镜像 registry 权限策略。
-
-### V5：生产平台版
-
-目标：
-
-```text
-成为团队级 AI DevOps 控制台。
-```
-
-能力：
-
-- CI/CD 集成；
-- GitHub / GitLab 集成；
-- Git 全功能 AI 控制台；
-- Docker 全功能 AI 控制台；
-- 监控集成；
-- 告警；
-- 自动健康巡检；
-- 部署前检查；
-- 回滚建议；
-- 多平台 Executor；
-- 多平台桌面 GUI App；
-- Web / 桌面 GUI / CLI / TUI 四端一致；
-- Rust TUI 跨平台分发。
 
 ## 11. 最终产品边界
 
