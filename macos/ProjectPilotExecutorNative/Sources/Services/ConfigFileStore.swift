@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConfigFileStore {
-    static func load() -> AgentConfiguration? {
+    static func load() -> ExecutorConfiguration? {
         let url = AppPaths.configURL
         guard FileManager.default.fileExists(atPath: url.path) else {
             return nil
@@ -9,13 +9,13 @@ enum ConfigFileStore {
 
         do {
             let data = try Data(contentsOf: url)
-            return try JSONDecoder().decode(AgentConfiguration.self, from: data)
+            return try JSONDecoder().decode(ExecutorConfiguration.self, from: data)
         } catch {
             return nil
         }
     }
 
-    static func save(_ configuration: AgentConfiguration) throws {
+    static func save(_ configuration: ExecutorConfiguration) throws {
         let url = AppPaths.configURL
         let directory = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

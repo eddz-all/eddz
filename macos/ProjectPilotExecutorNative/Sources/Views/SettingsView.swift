@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject var store: AgentStore
+    @ObservedObject var store: ExecutorStore
 
     var body: some View {
         Form {
             TextField("Backend URL", text: $store.configuration.serverURL)
-            SecureField(store.configuration.maskedToken.isEmpty ? "Agent Token" : "Leave blank to keep saved token", text: $store.tokenInput)
-            TextField("Machine ID", text: $store.configuration.machineID)
+            SecureField(store.configuration.maskedToken.isEmpty ? "Executor token" : "Leave blank to keep saved token", text: $store.tokenInput)
+            TextField("Executor ID", text: $store.configuration.executorID)
 
             HStack {
                 TextField("Allowed Root", text: $store.configuration.allowedRoot)

@@ -1,25 +1,25 @@
 import Foundation
 
-struct AgentConfiguration: Codable, Equatable {
+struct ExecutorConfiguration: Codable, Equatable {
     var serverURL: String
     var token: String
-    var machineID: String
+    var executorID: String
     var allowedRoot: String
     var interval: Double
 
     enum CodingKeys: String, CodingKey {
         case serverURL = "server_url"
         case token
-        case machineID = "machine_id"
+        case executorID = "executor_id"
         case allowedRoot = "allowed_root"
         case interval
     }
 
-    static var empty: AgentConfiguration {
-        AgentConfiguration(
+    static var empty: ExecutorConfiguration {
+        ExecutorConfiguration(
             serverURL: "",
             token: "",
-            machineID: Host.current().localizedName ?? "local-machine",
+            executorID: Host.current().localizedName ?? "local-machine",
             allowedRoot: FileManager.default.homeDirectoryForCurrentUser.path,
             interval: 5
         )

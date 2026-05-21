@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConnectionFormView: View {
-    @ObservedObject var store: AgentStore
+    @ObservedObject var store: ExecutorStore
 
     var body: some View {
         GroupBox("Connection") {
@@ -14,16 +14,16 @@ struct ConnectionFormView: View {
                 }
 
                 GridRow {
-                    Text("Agent Token")
+                    Text("Executor token")
                         .foregroundStyle(.secondary)
                     SecureField(store.configuration.maskedToken.isEmpty ? "Required" : "Leave blank to keep saved token", text: $store.tokenInput)
                         .textFieldStyle(.roundedBorder)
                 }
 
                 GridRow {
-                    Text("Machine ID")
+                    Text("Executor ID")
                         .foregroundStyle(.secondary)
-                    TextField("eddz-mac", text: $store.configuration.machineID)
+                    TextField("eddz-mac-local", text: $store.configuration.executorID)
                         .textFieldStyle(.roundedBorder)
                 }
 
@@ -66,7 +66,7 @@ struct ConnectionFormView: View {
                 .disabled(store.isRunning)
 
                 Button {
-                    store.isRunning ? store.stopAgent() : store.startAgent()
+                    store.isRunning ? store.stopExecutor() : store.startExecutor()
                 } label: {
                     Label(store.isRunning ? "Stop" : "Start", systemImage: store.isRunning ? "stop.fill" : "play.fill")
                 }

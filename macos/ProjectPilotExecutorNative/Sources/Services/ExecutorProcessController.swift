@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class AgentProcessController: ObservableObject {
+final class ExecutorProcessController: ObservableObject {
     @Published private(set) var isRunning = false
     @Published private(set) var output = ""
     @Published private(set) var lastError: String?
@@ -12,7 +12,7 @@ final class AgentProcessController: ObservableObject {
         guard !isRunning else { return }
 
         do {
-            let process = try makeProcess(arguments: ["-m", "projectpilot", "agent", "connect"])
+            let process = try makeProcess(arguments: ["-m", "projectpilot", "executor", "connect"])
             attachOutput(to: process)
             try process.run()
             self.process = process
@@ -22,7 +22,7 @@ final class AgentProcessController: ObservableObject {
             process.terminationHandler = { [weak self] process in
                 Task { @MainActor in
                     self?.isRunning = false
-                    self?.appendLine("Agent stopped with status \(process.terminationStatus).")
+                    self?.appendLine("Executor stopped with status \(process.terminationStatus).")
                 }
             }
         } catch {
@@ -40,7 +40,7 @@ final class AgentProcessController: ObservableObject {
 
     func pollOnce(completion: @escaping @MainActor @Sendable (String) -> Void) {
         do {
-            let process = try makeProcess(arguments: ["-m", "projectpilot", "agent", "connect", "--once", "--json"])
+            let process = try makeProcess(arguments: ["-m", "projectpilot", "executor", "connect", "--once", "--json"])
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe

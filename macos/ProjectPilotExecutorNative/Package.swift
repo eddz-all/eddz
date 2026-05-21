@@ -3,19 +3,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "ProjectPilotAgentNative",
+    name: "ProjectPilotExecutorNative",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .executable(
-            name: "ProjectPilotAgentNative",
-            targets: ["ProjectPilotAgentNative"]
+            name: "ProjectPilotExecutorNative",
+            targets: ["ProjectPilotExecutorNative"]
         )
     ],
     targets: [
         .executableTarget(
-            name: "ProjectPilotAgentNative",
+            name: "ProjectPilotExecutorNative",
             path: "Sources"
         )
     ]

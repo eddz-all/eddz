@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var store: AgentStore
+    @ObservedObject var store: ExecutorStore
 
     var body: some View {
         NavigationSplitView {
@@ -27,7 +27,7 @@ struct ContentView: View {
 }
 
 private struct HeaderView: View {
-    @ObservedObject var store: AgentStore
+    @ObservedObject var store: ExecutorStore
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -36,7 +36,7 @@ private struct HeaderView: View {
                 .foregroundStyle(store.isRunning ? .green : .secondary)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("ProjectPilot Agent")
+                Text("ProjectPilot Executor")
                     .font(.title2.bold())
                 Text(store.isRunning ? "Connected and polling for read-only tasks." : "Ready to connect to the backend.")
                     .foregroundStyle(.secondary)

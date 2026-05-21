@@ -8,7 +8,7 @@ from pathlib import Path
 class NativeMacOSAppTests(unittest.TestCase):
     def test_native_package_and_run_script_exist(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        package = root / "macos" / "ProjectPilotAgentNative" / "Package.swift"
+        package = root / "macos" / "ProjectPilotExecutorNative" / "Package.swift"
         script = root / "script" / "build_and_run.sh"
 
         self.assertTrue(package.exists())

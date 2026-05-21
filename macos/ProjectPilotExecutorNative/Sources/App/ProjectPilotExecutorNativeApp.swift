@@ -2,26 +2,26 @@ import AppKit
 import SwiftUI
 
 @main
-struct ProjectPilotAgentNativeApp: App {
+struct ProjectPilotExecutorNativeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store = AgentStore()
+    @StateObject private var store = ExecutorStore()
 
     var body: some Scene {
-        WindowGroup("ProjectPilot Agent") {
+        WindowGroup("ProjectPilot Executor") {
             ContentView(store: store)
                 .frame(minWidth: 820, minHeight: 540)
         }
         .commands {
             CommandGroup(replacing: .newItem) {}
-            CommandMenu("Agent") {
+            CommandMenu("Executor") {
                 Button("Start") {
-                    store.startAgent()
+                    store.startExecutor()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
                 .disabled(store.isRunning)
 
                 Button("Stop") {
-                    store.stopAgent()
+                    store.stopExecutor()
                 }
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!store.isRunning)

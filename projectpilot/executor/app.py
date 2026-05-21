@@ -7,11 +7,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from projectpilot.agent.client import poll_and_run_once
-from projectpilot.agent.config import AgentConfig, build_config, default_config_path, load_config, save_config
+from projectpilot.executor.client import poll_and_run_once
+from projectpilot.executor.config import ExecutorConfig, build_config, default_config_path, load_config, save_config
 
 
-class AgentBackgroundRunner:
+class ExecutorBackgroundRunner:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -23,7 +23,7 @@ class AgentBackgroundRunner:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self, config: AgentConfig) -> None:
+    def start(self, config: ExecutorConfig) -> None:
         with self._lock:
             if self.running:
                 return
@@ -34,7 +34,7 @@ class AgentBackgroundRunner:
     def stop(self) -> None:
         self._stop_event.set()
 
-    def _run(self, config: AgentConfig) -> None:
+    def _run(self, config: ExecutorConfig) -> None:
         while not self._stop_event.is_set():
             try:
                 self.last_result = poll_and_run_once(config)
@@ -44,10 +44,10 @@ class AgentBackgroundRunner:
             self._stop_event.wait(config.interval)
 
 
-class AgentAppState:
+class ExecutorAppState:
     def __init__(self, config_path: Path | None = None) -> None:
         self.config_path = config_path or default_config_path()
-        self.runner = AgentBackgroundRunner()
+        self.runner = ExecutorBackgroundRunner()
 
     def snapshot(self) -> dict[str, Any]:
         config = load_optional_config(self.config_path)
@@ -61,8 +61,8 @@ class AgentAppState:
         }
 
 
-def create_agent_app_server(host: str = "127.0.0.1", port: int = 8765, config_path: Path | None = None) -> ThreadingHTTPServer:
-    state = AgentAppState(config_path)
+def create_executor_app_server(host: str = "127.0.0.1", port: int = 8765, config_path: Path | None = None) -> ThreadingHTTPServer:
+    state = ExecutorAppState(config_path)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -90,7 +90,7 @@ def create_agent_app_server(host: str = "127.0.0.1", port: int = 8765, config_pa
                 return
             self.send_error(404)
 
-        def handle_save_config(self, app_state: AgentAppState) -> None:
+        def handle_save_config(self, app_state: ExecutorAppState) -> None:
             try:
                 payload = self.read_json()
                 existing = load_optional_config(app_state.config_path)
@@ -98,7 +98,7 @@ def create_agent_app_server(host: str = "127.0.0.1", port: int = 8765, config_pa
                 config = build_config(
                     server_url=str(payload.get("server_url", "")).strip(),
                     token=token,
-                    machine_id=str(payload.get("machine_id") or "").strip() or None,
+                    executor_id=str(payload.get("executor_id") or "").strip() or None,
                     allowed_root=str(payload.get("allowed_root") or Path.cwd()),
                     interval=float(payload.get("interval") or 5.0),
                 )
@@ -107,7 +107,7 @@ def create_agent_app_server(host: str = "127.0.0.1", port: int = 8765, config_pa
             except Exception as exc:
                 self.write_json({"success": False, "error_type": "config_error", "message": str(exc)}, status=400)
 
-        def handle_poll_once(self, app_state: AgentAppState) -> None:
+        def handle_poll_once(self, app_state: ExecutorAppState) -> None:
             try:
                 result = poll_and_run_once(load_config(app_state.config_path))
                 app_state.runner.last_result = result
@@ -117,7 +117,7 @@ def create_agent_app_server(host: str = "127.0.0.1", port: int = 8765, config_pa
                 app_state.runner.last_error = str(exc)
                 self.write_json({"success": False, "error_type": "poll_error", "message": str(exc)}, status=400)
 
-        def handle_start(self, app_state: AgentAppState) -> None:
+        def handle_start(self, app_state: ExecutorAppState) -> None:
             try:
                 app_state.runner.start(load_config(app_state.config_path))
                 self.write_json(app_state.snapshot())
@@ -152,18 +152,18 @@ def create_agent_app_server(host: str = "127.0.0.1", port: int = 8765, config_pa
     return ThreadingHTTPServer((host, port), Handler)
 
 
-def run_agent_app(
+def run_executor_app(
     host: str = "127.0.0.1",
     port: int = 8765,
     config_path: Path | None = None,
     open_browser: bool = True,
 ) -> None:
-    server = create_agent_app_server(host=host, port=port, config_path=config_path)
+    server = create_executor_app_server(host=host, port=port, config_path=config_path)
     actual_host, actual_port = server.server_address[:2]
     url = f"http://{actual_host}:{actual_port}"
     if open_browser:
         webbrowser.open(url)
-    print(f"ProjectPilot Agent app: {url}")
+    print(f"ProjectPilot Executor app: {url}")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
@@ -171,7 +171,7 @@ def run_agent_app(
         server.server_close()
 
 
-def load_optional_config(path: Path) -> AgentConfig | None:
+def load_optional_config(path: Path) -> ExecutorConfig | None:
     try:
         return load_config(path)
     except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError):
@@ -184,7 +184,7 @@ def render_index_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ProjectPilot Agent</title>
+  <title>ProjectPilot Executor</title>
   <style>
     :root {
       color-scheme: light;
@@ -340,7 +340,7 @@ def render_index_html() -> str:
 </head>
 <body>
   <header>
-    <h1>ProjectPilot Agent</h1>
+    <h1>ProjectPilot Executor</h1>
     <span id="statusBadge" class="badge">Stopped</span>
   </header>
   <main>
@@ -349,10 +349,10 @@ def render_index_html() -> str:
       <form id="configForm">
         <label for="serverUrl">Backend URL</label>
         <input id="serverUrl" name="server_url" placeholder="http://127.0.0.1:8000" autocomplete="off">
-        <label for="token">Agent Token</label>
+        <label for="token">Executor token</label>
         <input id="token" name="token" type="password" placeholder="Leave blank to keep saved token" autocomplete="off">
-        <label for="machineId">Machine ID</label>
-        <input id="machineId" name="machine_id" placeholder="eddz-mac" autocomplete="off">
+        <label for="executorId">Executor ID</label>
+        <input id="executorId" name="executor_id" placeholder="eddz-mac-local" autocomplete="off">
         <div class="row">
           <div>
             <label for="allowedRoot">Allowed Root</label>
@@ -377,7 +377,7 @@ def render_index_html() -> str:
         <dl>
           <dt>Config</dt><dd id="configPath">-</dd>
           <dt>Server</dt><dd id="serverText">-</dd>
-          <dt>Machine</dt><dd id="machineText">-</dd>
+          <dt>Executor</dt><dd id="executorText">-</dd>
           <dt>Allowed root</dt><dd id="rootText">-</dd>
           <dt>Last error</dt><dd id="errorText">-</dd>
         </dl>
@@ -412,13 +412,13 @@ def render_index_html() -> str:
       badge.classList.toggle("running", state.running);
       setText("configPath", state.config_path);
       setText("serverText", state.config && state.config.server_url);
-      setText("machineText", state.config && state.config.machine_id);
+      setText("executorText", state.config && state.config.executor_id);
       setText("rootText", state.config && state.config.allowed_root);
       setText("errorText", state.last_error);
       document.querySelector("#errorText").classList.toggle("error", Boolean(state.last_error));
       if (state.config) {
         form.server_url.value = state.config.server_url || "";
-        form.machine_id.value = state.config.machine_id || "";
+        form.executor_id.value = state.config.executor_id || "";
         form.allowed_root.value = state.config.allowed_root || "";
         form.interval.value = state.config.interval || 5;
       }

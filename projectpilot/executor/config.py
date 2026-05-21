@@ -9,12 +9,13 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class AgentConfig:
+class ExecutorConfig:
     server_url: str
     token: str
-    machine_id: str
+    executor_id: str
     allowed_root: Path
     interval: float = 5.0
+    mode: str = "local"
 
     def to_dict(self, mask_token: bool = False) -> dict[str, Any]:
         data = asdict(self)
@@ -25,29 +26,30 @@ class AgentConfig:
 
 
 def default_config_path() -> Path:
-    override = os.environ.get("PROJECTPILOT_AGENT_CONFIG")
+    override = os.environ.get("PROJECTPILOT_EXECUTOR_CONFIG")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".projectpilot" / "agent.json"
+    return Path.home() / ".projectpilot" / "executor.json"
 
 
-def default_machine_id() -> str:
+def default_executor_id() -> str:
     return socket.gethostname() or "local-machine"
 
 
-def load_config(path: Path | None = None) -> AgentConfig:
+def load_config(path: Path | None = None) -> ExecutorConfig:
     config_path = (path or default_config_path()).expanduser()
     data = json.loads(config_path.read_text(encoding="utf-8"))
-    return AgentConfig(
+    return ExecutorConfig(
         server_url=str(data["server_url"]).rstrip("/"),
         token=str(data["token"]),
-        machine_id=str(data["machine_id"]),
+        executor_id=str(data["executor_id"]),
         allowed_root=Path(data["allowed_root"]).expanduser(),
         interval=float(data.get("interval", 5.0)),
+        mode=str(data.get("mode", "local")),
     )
 
 
-def save_config(config: AgentConfig, path: Path | None = None) -> Path:
+def save_config(config: ExecutorConfig, path: Path | None = None) -> Path:
     config_path = (path or default_config_path()).expanduser()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(config.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -61,10 +63,11 @@ def save_config(config: AgentConfig, path: Path | None = None) -> Path:
 def build_config(
     server_url: str,
     token: str,
-    machine_id: str | None,
+    executor_id: str | None,
     allowed_root: str | Path,
     interval: float,
-) -> AgentConfig:
+    mode: str = "local",
+) -> ExecutorConfig:
     if not server_url:
         raise ValueError("server_url is required.")
     if not token:
@@ -76,12 +79,13 @@ def build_config(
     if not root.exists():
         raise ValueError(f"allowed_root does not exist: {root}")
 
-    return AgentConfig(
+    return ExecutorConfig(
         server_url=server_url.rstrip("/"),
         token=token,
-        machine_id=machine_id or default_machine_id(),
+        executor_id=executor_id or default_executor_id(),
         allowed_root=root.resolve(),
         interval=interval,
+        mode=mode,
     )
 
 

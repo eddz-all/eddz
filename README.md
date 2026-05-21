@@ -111,12 +111,12 @@ environment = detect_local_environment("/path/to/project")
 
 Both functions return structured `dict` data. They do not write to the database or call backend APIs. The backend can store successful results as `GitStatus` and `EnvironmentSnapshot`, and can handle failures through the shared `success`, `error_type`, and `message` fields.
 
-## Agent Connection Helper
+## Executor Connection Helper
 
-Open the local Agent app:
+Open the local Executor app:
 
 ```bash
-projectpilot agent app
+projectpilot executor app
 ```
 
 Open the native macOS window:
@@ -128,46 +128,56 @@ Open the native macOS window:
 After the first build, the native bundle is available at:
 
 ```text
-dist/ProjectPilot Agent Native.app
+dist/ProjectPilot Executor Native.app
 ```
 
-The native app opens a SwiftUI window for saving connection settings, choosing the allowed root folder, running one poll, and starting or stopping the read-only agent loop. The browser app remains available through `projectpilot agent app` as a lightweight fallback.
+The native app opens a SwiftUI window for saving connection settings, choosing the allowed root folder, running one poll, and starting or stopping the read-only executor loop. The browser app remains available through `projectpilot executor app` as a lightweight fallback.
 
 For polling-mode integration, configure this machine once:
 
 ```bash
-projectpilot agent setup \
+projectpilot executor setup \
   --server-url http://backend.example.test \
-  --machine-id eddz-mac \
+  --executor-id eddz-mac-local \
   --allowed-root /Users/eddz/work
 ```
 
-The setup command prompts for the agent token and stores the config in `~/.projectpilot/agent.json`.
+The setup command prompts for the Executor token and stores the config in `~/.projectpilot/executor.json`.
 
-Start the agent:
+Start the executor:
 
 ```bash
-projectpilot agent connect
+projectpilot executor connect
 ```
 
 For backend development, process one task and exit:
 
 ```bash
-projectpilot agent connect --once --json
+projectpilot executor connect --once --json
+```
+
+List SSH hosts visible to the executor:
+
+```bash
+projectpilot executor ssh-hosts --json
+projectpilot executor ssh-hosts --resolve --json
 ```
 
 The backend contract for the MVP is:
 
 ```text
-POST /agent/poll
-POST /agent/tasks/{task_id}/result
+POST /executor/poll
+POST /executor/tasks/{task_id}/result
 ```
 
-The agent only supports read-only tasks in this phase:
+The executor only supports approved read-only task types in this phase:
 
 ```text
 detect_git
 detect_environment
+check_connection
+detect_remote_git_status
+detect_remote_environment
 ```
 
-Every task path must be inside `allowed-root`. Tasks outside that directory are rejected with `path_not_allowed`.
+Local task paths must be inside `allowed-root`. Remote SSH tasks require `ssh_host` and, when they inspect a project, an absolute remote `project_path`. The executor builds the SSH command from a whitelist template and posts stdout, stderr, and exit code back to the backend.

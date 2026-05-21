@@ -7,14 +7,21 @@ import urllib.error
 import urllib.request
 from typing import Any, TextIO
 
-from projectpilot.agent.config import AgentConfig
-from projectpilot.agent.security import PathNotAllowedError, resolve_allowed_project_path
+from projectpilot.executor.config import ExecutorConfig
+from projectpilot.executor.remote import check_connection, detect_remote_environment, detect_remote_git_status
+from projectpilot.executor.security import PathNotAllowedError, resolve_allowed_project_path
 from projectpilot.integration.member_b import detect_local_environment, detect_local_git_status
 
-AGENT_CAPABILITIES = ["detect_git", "detect_environment"]
+EXECUTOR_CAPABILITIES = [
+    "detect_git",
+    "detect_environment",
+    "check_connection",
+    "detect_remote_git_status",
+    "detect_remote_environment",
+]
 
 
-def poll_and_run_once(config: AgentConfig, timeout: int = 15) -> dict[str, Any]:
+def poll_and_run_once(config: ExecutorConfig, timeout: int = 15) -> dict[str, Any]:
     poll_response = poll_for_task(config, timeout=timeout)
     task = poll_response.get("task")
     if task is None:
@@ -33,14 +40,14 @@ def poll_and_run_once(config: AgentConfig, timeout: int = 15) -> dict[str, Any]:
 
 
 def run_connect_loop(
-    config: AgentConfig,
+    config: ExecutorConfig,
     once: bool = False,
     timeout: int = 15,
     output: TextIO | None = None,
 ) -> None:
     stream = output or sys.stdout
-    print(f"ProjectPilot Agent connected to {config.server_url}", file=stream)
-    print(f"Machine: {config.machine_id}", file=stream)
+    print(f"ProjectPilot Executor connected to {config.server_url}", file=stream)
+    print(f"Executor: {config.executor_id}", file=stream)
     print(f"Allowed root: {config.allowed_root}", file=stream)
     print("Press Ctrl+C to stop.", file=stream)
     print(file=stream)
@@ -64,31 +71,38 @@ def run_connect_loop(
         time.sleep(config.interval)
 
 
-def poll_for_task(config: AgentConfig, timeout: int = 15) -> dict[str, Any]:
+def poll_for_task(config: ExecutorConfig, timeout: int = 15) -> dict[str, Any]:
     payload = {
-        "machine_id": config.machine_id,
-        "capabilities": AGENT_CAPABILITIES,
+        "executor_id": config.executor_id,
+        "mode": config.mode,
+        "capabilities": EXECUTOR_CAPABILITIES,
         "status": "online",
     }
-    return request_json(config, "POST", "/agent/poll", payload, timeout=timeout)
+    return request_json(config, "POST", "/executor/poll", payload, timeout=timeout)
 
 
-def submit_task_result(config: AgentConfig, task_id: str, result: dict[str, Any], timeout: int = 15) -> dict[str, Any]:
+def submit_task_result(config: ExecutorConfig, task_id: str, result: dict[str, Any], timeout: int = 15) -> dict[str, Any]:
     payload = {
         "task_id": task_id,
-        "machine_id": config.machine_id,
+        "executor_id": config.executor_id,
         "success": bool(result.get("success", False)),
         "result": result,
     }
-    return request_json(config, "POST", f"/agent/tasks/{task_id}/result", payload, timeout=timeout)
+    return request_json(config, "POST", f"/executor/tasks/{task_id}/result", payload, timeout=timeout)
 
 
-def execute_task(task: dict[str, Any], config: AgentConfig) -> dict[str, Any]:
+def execute_task(task: dict[str, Any], config: ExecutorConfig) -> dict[str, Any]:
     task_type = task.get("type")
     project_path = task.get("project_path")
 
-    if task_type not in AGENT_CAPABILITIES:
+    if task_type not in EXECUTOR_CAPABILITIES:
         return failure("unsupported_task", f"Unsupported task type: {task_type}")
+
+    if task_type == "check_connection":
+        return execute_remote_task(task_type, task, config)
+    if task_type in {"detect_remote_git_status", "detect_remote_environment"}:
+        return execute_remote_task(task_type, task, config)
+
     if not project_path:
         return failure("missing_project_path", "Task is missing project_path.")
 
@@ -104,8 +118,36 @@ def execute_task(task: dict[str, Any], config: AgentConfig) -> dict[str, Any]:
     return failure("unsupported_task", f"Unsupported task type: {task_type}")
 
 
+def execute_remote_task(task_type: str, task: dict[str, Any], config: ExecutorConfig) -> dict[str, Any]:
+    try:
+        host = extract_ssh_host(task)
+        timeout = int(task.get("timeout") or 20)
+        if task_type == "check_connection":
+            return check_connection(host, timeout=timeout)
+
+        project_path = task.get("project_path")
+        if not project_path:
+            return failure("missing_project_path", "Task is missing project_path.")
+
+        if task_type == "detect_remote_git_status":
+            return detect_remote_git_status(host, str(project_path), timeout=timeout)
+        if task_type == "detect_remote_environment":
+            return detect_remote_environment(host, str(project_path), timeout=timeout)
+    except ValueError as exc:
+        return failure("invalid_task", str(exc))
+
+    return failure("unsupported_task", f"Unsupported task type: {task_type}")
+
+
+def extract_ssh_host(task: dict[str, Any]) -> str:
+    host = task.get("ssh_host") or task.get("host") or task.get("server")
+    if not host:
+        raise ValueError("Task is missing ssh_host.")
+    return str(host)
+
+
 def request_json(
-    config: AgentConfig,
+    config: ExecutorConfig,
     method: str,
     path: str,
     payload: dict[str, Any],

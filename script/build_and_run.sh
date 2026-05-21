@@ -2,13 +2,13 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="ProjectPilot Agent Native"
-APP_EXECUTABLE="ProjectPilotAgentNative"
-BUNDLE_ID="dev.projectpilot.agent.native"
+APP_NAME="ProjectPilot Executor Native"
+APP_EXECUTABLE="ProjectPilotExecutorNative"
+BUNDLE_ID="dev.projectpilot.executor.native"
 MIN_SYSTEM_VERSION="14.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGE_DIR="$ROOT_DIR/macos/ProjectPilotAgentNative"
+PACKAGE_DIR="$ROOT_DIR/macos/ProjectPilotExecutorNative"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"

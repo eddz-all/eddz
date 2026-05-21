@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct StatusPanelView: View {
-    @ObservedObject var store: AgentStore
+    @ObservedObject var store: ExecutorStore
 
     var body: some View {
         Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
@@ -44,7 +44,7 @@ struct StatusPanelView: View {
             }
 
             GridRow {
-                GroupBox("Agent Output") {
+                GroupBox("Executor Output") {
                     ScrollView {
                         Text(store.output.isEmpty ? "No output yet." : store.output)
                             .font(.system(.caption, design: .monospaced))

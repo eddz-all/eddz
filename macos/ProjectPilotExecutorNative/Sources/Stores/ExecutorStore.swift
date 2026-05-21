@@ -2,14 +2,14 @@ import Combine
 import Foundation
 
 @MainActor
-final class AgentStore: ObservableObject {
-    @Published var configuration: AgentConfiguration
+final class ExecutorStore: ObservableObject {
+    @Published var configuration: ExecutorConfiguration
     @Published var tokenInput = ""
     @Published var message = ""
     @Published var pollResult = "{}"
     @Published var hasSavedConfiguration = false
 
-    private let processController = AgentProcessController()
+    private let processController = ExecutorProcessController()
     private var cancellables: Set<AnyCancellable> = []
 
     var isRunning: Bool {
@@ -66,12 +66,12 @@ final class AgentStore: ObservableObject {
         }
     }
 
-    func startAgent() {
+    func startExecutor() {
         guard saveConfiguration() else { return }
         processController.start()
     }
 
-    func stopAgent() {
+    func stopExecutor() {
         processController.stop()
     }
 
@@ -82,12 +82,12 @@ final class AgentStore: ObservableObject {
         }
     }
 
-    private func validate(_ configuration: AgentConfiguration) throws {
+    private func validate(_ configuration: ExecutorConfiguration) throws {
         if configuration.serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ValidationError("Backend URL is required.")
         }
         if configuration.token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw ValidationError("Agent token is required.")
+            throw ValidationError("Executor token is required.")
         }
         if configuration.allowedRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ValidationError("Allowed root is required.")

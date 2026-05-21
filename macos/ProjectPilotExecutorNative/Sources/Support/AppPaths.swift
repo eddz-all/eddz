@@ -4,7 +4,7 @@ enum AppPaths {
     static var configURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".projectpilot", isDirectory: true)
-            .appendingPathComponent("agent.json")
+            .appendingPathComponent("executor.json")
     }
 
     static func repositoryRoot() -> URL {

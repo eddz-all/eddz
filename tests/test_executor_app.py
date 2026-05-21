@@ -11,35 +11,35 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from projectpilot.agent.app import create_agent_app_server
-from projectpilot.agent.config import load_config
+from projectpilot.executor.app import create_executor_app_server
+from projectpilot.executor.config import load_config
 from projectpilot.cli import main as cli_main
 
 
-class AgentAppTests(unittest.TestCase):
-    def test_agent_app_help_lists_app_command(self) -> None:
+class ExecutorAppTests(unittest.TestCase):
+    def test_executor_app_help_lists_app_command(self) -> None:
         output = StringIO()
         with redirect_stdout(output):
             with self.assertRaises(SystemExit) as exc:
-                cli_main(["agent", "app", "--help"])
+                cli_main(["executor", "app", "--help"])
 
         self.assertEqual(exc.exception.code, 0)
-        self.assertIn("Open the local ProjectPilot Agent app", output.getvalue())
+        self.assertIn("Open the local ProjectPilot Executor app", output.getvalue())
 
     def test_app_index_renders(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            server = start_app_server(Path(temp_dir) / "agent.json")
+            server = start_app_server(Path(temp_dir) / "executor.json")
             try:
                 body = get_text(server, "/")
 
-                self.assertIn("ProjectPilot Agent", body)
+                self.assertIn("ProjectPilot Executor", body)
                 self.assertIn("Backend URL", body)
             finally:
                 stop_server(server)
 
     def test_app_saves_config(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "agent.json"
+            config_path = Path(temp_dir) / "executor.json"
             server = start_app_server(config_path)
             try:
                 result = post_json(
@@ -48,7 +48,7 @@ class AgentAppTests(unittest.TestCase):
                     {
                         "server_url": "http://127.0.0.1:8000",
                         "token": "secret-token",
-                        "machine_id": "eddz-mac",
+                        "executor_id": "eddz-mac-local",
                         "allowed_root": temp_dir,
                         "interval": 7,
                     },
@@ -58,7 +58,7 @@ class AgentAppTests(unittest.TestCase):
                 self.assertTrue(result["configured"])
                 self.assertEqual(result["config"]["token"], "secr...oken")
                 self.assertEqual(config.server_url, "http://127.0.0.1:8000")
-                self.assertEqual(config.machine_id, "eddz-mac")
+                self.assertEqual(config.executor_id, "eddz-mac-local")
                 self.assertEqual(config.allowed_root, Path(temp_dir).resolve())
                 self.assertEqual(config.interval, 7.0)
             finally:
@@ -69,7 +69,7 @@ class AgentAppTests(unittest.TestCase):
             backend, backend_state = start_backend_server(
                 {"id": "task_1", "type": "detect_environment", "project_path": temp_dir}
             )
-            config_path = Path(temp_dir) / "agent.json"
+            config_path = Path(temp_dir) / "executor.json"
             app = start_app_server(config_path)
             try:
                 post_json(
@@ -78,7 +78,7 @@ class AgentAppTests(unittest.TestCase):
                     {
                         "server_url": f"http://127.0.0.1:{backend.server_port}",
                         "token": "secret-token",
-                        "machine_id": "eddz-mac",
+                        "executor_id": "eddz-mac-local",
                         "allowed_root": temp_dir,
                         "interval": 5,
                     },
@@ -87,7 +87,7 @@ class AgentAppTests(unittest.TestCase):
                 result = post_json(app, "/api/poll-once", {})
 
                 self.assertTrue(result["last_result"]["submitted"])
-                self.assertEqual(backend_state["poll_payloads"][0]["machine_id"], "eddz-mac")
+                self.assertEqual(backend_state["poll_payloads"][0]["executor_id"], "eddz-mac-local")
                 self.assertEqual(backend_state["result_payloads"][0]["task_id"], "task_1")
                 self.assertTrue(backend_state["result_payloads"][0]["result"]["success"])
             finally:
@@ -96,7 +96,7 @@ class AgentAppTests(unittest.TestCase):
 
 
 def start_app_server(config_path: Path) -> ThreadingHTTPServer:
-    server = create_agent_app_server(host="127.0.0.1", port=0, config_path=config_path)
+    server = create_executor_app_server(host="127.0.0.1", port=0, config_path=config_path)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
@@ -111,11 +111,11 @@ def start_backend_server(task: dict[str, Any]) -> tuple[ThreadingHTTPServer, dic
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
             payload = read_json_body(self)
-            if self.path == "/agent/poll":
+            if self.path == "/executor/poll":
                 state["poll_payloads"].append(payload)
                 write_json(self, {"task": task})
                 return
-            if self.path == f"/agent/tasks/{task['id']}/result":
+            if self.path == f"/executor/tasks/{task['id']}/result":
                 state["result_payloads"].append(payload)
                 write_json(self, {"success": True})
                 return

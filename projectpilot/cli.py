@@ -5,11 +5,13 @@ from getpass import getpass
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from projectpilot import __version__
-from projectpilot.agent.app import run_agent_app
-from projectpilot.agent.client import poll_and_run_once, run_connect_loop
-from projectpilot.agent.config import build_config, default_config_path, load_config, save_config
+from projectpilot.executor.app import run_executor_app
+from projectpilot.executor.client import poll_and_run_once, run_connect_loop
+from projectpilot.executor.config import build_config, default_config_path, load_config, save_config
+from projectpilot.executor.remote import list_ssh_hosts, resolve_ssh_host
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import read_audit_entries
 from projectpilot.git.commit_planner import build_commit_plan
@@ -210,52 +212,67 @@ def build_parser() -> argparse.ArgumentParser:
     add_path_argument(quickstart_command)
     quickstart_command.set_defaults(handler=handle_git_quickstart)
 
-    agent_parser = subparsers.add_parser("agent", help="Connect this machine to a ProjectPilot backend.")
-    agent_subparsers = agent_parser.add_subparsers(dest="agent_command")
+    executor_parser = subparsers.add_parser("executor", help="Connect this machine to a ProjectPilot backend.")
+    executor_subparsers = executor_parser.add_subparsers(dest="executor_command")
 
-    setup_command = agent_subparsers.add_parser(
+    setup_command = executor_subparsers.add_parser(
         "setup",
         help="Save backend connection settings for this machine.",
     )
-    add_agent_config_argument(setup_command)
+    add_executor_config_argument(setup_command)
     setup_command.add_argument("--server-url", help="Backend base URL, such as http://127.0.0.1:8000.")
-    setup_command.add_argument("--token", help="Agent token. If omitted, ProjectPilot prompts for it.")
-    setup_command.add_argument("--machine-id", help="Machine identifier shown in the backend.")
+    setup_command.add_argument("--token", help="Executor token. If omitted, ProjectPilot prompts for it.")
+    setup_command.add_argument("--executor-id", help="Executor identifier shown in the backend.")
+    setup_command.add_argument("--mode", default="local", choices=["local", "central"], help="Executor mode.")
     setup_command.add_argument(
         "--allowed-root",
-        help="Root directory this agent is allowed to inspect. Defaults to the current directory.",
+        help="Root directory this executor is allowed to inspect. Defaults to the current directory.",
     )
     setup_command.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds.")
     setup_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    setup_command.set_defaults(handler=handle_agent_setup)
+    setup_command.set_defaults(handler=handle_executor_setup)
 
-    status_command = agent_subparsers.add_parser("status", help="Show saved agent connection settings.")
-    add_agent_config_argument(status_command)
+    status_command = executor_subparsers.add_parser("status", help="Show saved executor connection settings.")
+    add_executor_config_argument(status_command)
     status_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    status_command.set_defaults(handler=handle_agent_status)
+    status_command.set_defaults(handler=handle_executor_status)
 
-    connect_command = agent_subparsers.add_parser("connect", help="Poll the backend for read-only detection tasks.")
-    add_agent_config_argument(connect_command)
+    connect_command = executor_subparsers.add_parser("connect", help="Poll the backend for read-only detection tasks.")
+    add_executor_config_argument(connect_command)
     connect_command.add_argument("--server-url", help="Override backend base URL.")
-    connect_command.add_argument("--token", help="Override agent token.")
-    connect_command.add_argument("--machine-id", help="Override machine identifier.")
+    connect_command.add_argument("--token", help="Override executor token.")
+    connect_command.add_argument("--executor-id", help="Override executor identifier.")
+    connect_command.add_argument("--mode", choices=["local", "central"], help="Override executor mode.")
     connect_command.add_argument("--allowed-root", help="Override allowed root directory.")
     connect_command.add_argument("--interval", type=float, help="Override polling interval in seconds.")
     connect_command.add_argument("--timeout", type=int, default=15, help="HTTP timeout in seconds.")
     connect_command.add_argument("--once", action="store_true", help="Poll and process at most one task.")
     connect_command.add_argument("--json", action="store_true", help="Print machine-readable JSON for --once.")
-    connect_command.set_defaults(handler=handle_agent_connect)
+    connect_command.set_defaults(handler=handle_executor_connect)
 
-    app_command = agent_subparsers.add_parser(
+    app_command = executor_subparsers.add_parser(
         "app",
-        help="Open the local ProjectPilot Agent app.",
-        description="Open the local ProjectPilot Agent app.",
+        help="Open the local ProjectPilot Executor app.",
+        description="Open the local ProjectPilot Executor app.",
     )
-    add_agent_config_argument(app_command)
+    add_executor_config_argument(app_command)
     app_command.add_argument("--host", default="127.0.0.1", help="Local app host.")
     app_command.add_argument("--port", type=int, default=8765, help="Local app port.")
     app_command.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically.")
-    app_command.set_defaults(handler=handle_agent_app)
+    app_command.set_defaults(handler=handle_executor_app)
+
+    ssh_hosts_command = executor_subparsers.add_parser(
+        "ssh-hosts",
+        help="List SSH hosts available to this executor.",
+    )
+    ssh_hosts_command.add_argument(
+        "--ssh-config",
+        type=Path,
+        help="SSH config path. Defaults to ~/.ssh/config.",
+    )
+    ssh_hosts_command.add_argument("--resolve", action="store_true", help="Resolve each host with ssh -G.")
+    ssh_hosts_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    ssh_hosts_command.set_defaults(handler=handle_executor_ssh_hosts)
 
     return parser
 
@@ -269,11 +286,11 @@ def add_path_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def add_agent_config_argument(parser: argparse.ArgumentParser) -> None:
+def add_executor_config_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config",
         type=Path,
-        help="Agent config path. Defaults to ~/.projectpilot/agent.json.",
+        help="Executor config path. Defaults to ~/.projectpilot/executor.json.",
     )
 
 
@@ -554,19 +571,20 @@ def handle_git_quickstart(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_agent_setup(args: argparse.Namespace) -> int:
+def handle_executor_setup(args: argparse.Namespace) -> int:
     config_path = args.config or default_config_path()
     server_url = args.server_url or input("Backend server URL: ").strip()
-    token = args.token or getpass("Agent token: ").strip()
-    machine_id = args.machine_id or input("Machine ID [local hostname]: ").strip() or None
+    token = args.token or getpass("Executor token: ").strip()
+    executor_id = args.executor_id or input("Executor ID [local hostname]: ").strip() or None
     allowed_root = args.allowed_root or input(f"Allowed root [{Path.cwd()}]: ").strip() or str(Path.cwd())
 
     config = build_config(
         server_url=server_url,
         token=token,
-        machine_id=machine_id,
+        executor_id=executor_id,
         allowed_root=allowed_root,
         interval=args.interval,
+        mode=args.mode,
     )
     saved_path = save_config(config, config_path)
 
@@ -583,17 +601,18 @@ def handle_agent_setup(args: argparse.Namespace) -> int:
         )
         return 0
 
-    print(f"Agent config saved to: {saved_path}")
+    print(f"Executor config saved to: {saved_path}")
     print(f"Server: {config.server_url}")
-    print(f"Machine: {config.machine_id}")
+    print(f"Executor: {config.executor_id}")
+    print(f"Mode: {config.mode}")
     print(f"Allowed root: {config.allowed_root}")
     print()
     print("Start polling with:")
-    print("  projectpilot agent connect")
+    print("  projectpilot executor connect")
     return 0
 
 
-def handle_agent_status(args: argparse.Namespace) -> int:
+def handle_executor_status(args: argparse.Namespace) -> int:
     config_path = args.config or default_config_path()
     config = load_config(config_path)
     payload = {
@@ -606,11 +625,12 @@ def handle_agent_status(args: argparse.Namespace) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
-    print("ProjectPilot Agent")
+    print("ProjectPilot Executor")
     print()
     print(f"Config: {payload['config_path']}")
     print(f"Server: {config.server_url}")
-    print(f"Machine: {config.machine_id}")
+    print(f"Executor: {config.executor_id}")
+    print(f"Mode: {config.mode}")
     print(f"Allowed root: {config.allowed_root}")
     print(f"Allowed root exists: {'yes' if payload['allowed_root_exists'] else 'no'}")
     print(f"Interval: {config.interval}s")
@@ -618,8 +638,8 @@ def handle_agent_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_agent_connect(args: argparse.Namespace) -> int:
-    config = load_or_build_agent_config(args)
+def handle_executor_connect(args: argparse.Namespace) -> int:
+    config = load_or_build_executor_config(args)
 
     if args.once and args.json:
         result = poll_and_run_once(config, timeout=args.timeout)
@@ -630,8 +650,8 @@ def handle_agent_connect(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_agent_app(args: argparse.Namespace) -> int:
-    run_agent_app(
+def handle_executor_app(args: argparse.Namespace) -> int:
+    run_executor_app(
         host=args.host,
         port=args.port,
         config_path=args.config,
@@ -640,30 +660,51 @@ def handle_agent_app(args: argparse.Namespace) -> int:
     return 0
 
 
-def load_or_build_agent_config(args: argparse.Namespace):
+def handle_executor_ssh_hosts(args: argparse.Namespace) -> int:
+    hosts = list_ssh_hosts(args.ssh_config)
+    payload: dict[str, Any] = {"hosts": hosts}
+    if args.resolve:
+        payload["resolved"] = [resolve_ssh_host(host) for host in hosts]
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    if not hosts:
+        print("No SSH hosts found.")
+        return 0
+    for host in hosts:
+        print(host)
+    return 0
+
+
+def load_or_build_executor_config(args: argparse.Namespace):
     config_path = args.config or default_config_path()
     if config_path.expanduser().exists():
         config = load_config(config_path)
         server_url = args.server_url or config.server_url
         token = args.token or config.token
-        machine_id = args.machine_id or config.machine_id
+        executor_id = args.executor_id or config.executor_id
         allowed_root = args.allowed_root or config.allowed_root
         interval = args.interval if args.interval is not None else config.interval
+        mode = args.mode or config.mode
     else:
         if not (args.server_url and args.token and args.allowed_root):
-            raise RuntimeError("Agent config not found. Run `projectpilot agent setup` first.")
+            raise RuntimeError("Executor config not found. Run `projectpilot executor setup` first.")
         server_url = args.server_url
         token = args.token
-        machine_id = args.machine_id
+        executor_id = args.executor_id
         allowed_root = args.allowed_root
         interval = args.interval if args.interval is not None else 5.0
+        mode = args.mode or "local"
 
     return build_config(
         server_url=server_url,
         token=token,
-        machine_id=machine_id,
+        executor_id=executor_id,
         allowed_root=allowed_root,
         interval=interval,
+        mode=mode,
     )
 
 
