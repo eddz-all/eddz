@@ -167,6 +167,9 @@ class ExecutorBackendStore:
             "run_remote_script",
             "apply_remote_script",
             "execute_remote_script",
+            "run_local_script",
+            "apply_local_script",
+            "execute_local_script",
         }:
             stdout, stderr = operation_streams(result)
             operation = {

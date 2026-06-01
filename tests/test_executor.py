@@ -225,6 +225,110 @@ class ExecutorTests(unittest.TestCase):
             self.assertFalse(result["success"])
             self.assertEqual(result["error_type"], "git_operation_failed")
 
+    def test_execute_task_rejects_unapproved_local_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "run_local_script",
+                    "project_path": temp_dir,
+                    "script": "echo hello\n",
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "approval_required")
+
+    def test_execute_task_runs_approved_local_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "run_local_script",
+                    "project_path": temp_dir,
+                    "approved": True,
+                    "interpreter": "sh",
+                    "args": ["one"],
+                    "env": {"PROJECTPILOT_TEST": "yes"},
+                    "script": "printf '%s:%s\\n' \"$PROJECTPILOT_TEST\" \"$1\"\npwd\n",
+                },
+                config,
+            )
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["operation"], "run_local_script")
+            self.assertEqual(result["execution_mode"], "local")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertIn("yes:one", result["stdout"])
+            self.assertIn(str(Path(temp_dir).resolve()), result["stdout"])
+
+    def test_execute_task_accepts_backend_task_type_and_payload_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="server-b",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "task_type": "run_local_script",
+                    "executor_id": "server-b",
+                    "payload": {
+                        "project_path": temp_dir,
+                        "approved": True,
+                        "interpreter": "bash",
+                        "script": "printf backend-shape-ok\n",
+                    },
+                },
+                config,
+            )
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["operation"], "run_local_script")
+            self.assertIn("backend-shape-ok", result["stdout"])
+
+    def test_execute_task_rejects_local_script_hash_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "run_local_script",
+                    "project_path": temp_dir,
+                    "approved": True,
+                    "script": "echo hello\n",
+                    "script_sha256": "wrong",
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "script_hash_mismatch")
+
     def test_execute_task_runs_remote_connection_check(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = ExecutorConfig(
@@ -366,6 +470,7 @@ class ExecutorTests(unittest.TestCase):
                 self.assertIn("apply_git_operation", state["poll_payloads"][0]["capabilities"])
                 self.assertIn("apply_remote_git_operation", state["poll_payloads"][0]["capabilities"])
                 self.assertIn("run_remote_script", state["poll_payloads"][0]["capabilities"])
+                self.assertIn("run_local_script", state["poll_payloads"][0]["capabilities"])
                 self.assertEqual(state["result_payloads"][0]["task_id"], "task_1")
                 self.assertTrue(state["result_payloads"][0]["success"])
                 self.assertIn("started_at", state["result_payloads"][0])

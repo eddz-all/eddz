@@ -56,6 +56,19 @@ cat > "$DIST_DIR/examples/remote-script-task.json" <<'JSON'
 }
 JSON
 
+cat > "$DIST_DIR/examples/local-script-task.json" <<'JSON'
+{
+  "id": "task_script_1",
+  "type": "run_local_script",
+  "approved": true,
+  "executor_id": "server-b",
+  "project_path": "/home/hzy/project/web",
+  "interpreter": "bash",
+  "script": "set -euo pipefail\npwd\ngit status --short\n",
+  "script_sha256": "expected_sha256_hex"
+}
+JSON
+
 cat > "$DIST_DIR/README_EXECUTOR.md" <<'MD'
 # ProjectPilot Executor Bundle
 
@@ -129,6 +142,16 @@ Trigger a project/server detection flow on the backend:
   --server-id 1 \
   --json
 ```
+
+## Local Script Task Shape
+
+For the server-b VM flow, the backend can queue a local approved script task:
+
+```text
+examples/local-script-task.json
+```
+
+The executor only runs it if `project_path` is inside `allowed_root`.
 
 ## Remote Script Task Shape
 

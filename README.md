@@ -297,13 +297,14 @@ detect_remote_git_status
 detect_remote_environment
 apply_remote_git_operation
 run_remote_script
+run_local_script
 ```
 
 Local task paths must be inside `allowed-root`. `smart_git_analyze` is a read-only Agent task for scheme-A deployments where each machine runs its own ProjectPilot Agent and uploads smart Git JSON to the backend. Remote SSH tasks require `ssh_host` and, when they inspect or modify a project, an absolute remote `project_path`. Git and script execution tasks must include `approved: true`; optional `expected_command` lets the backend require the executor-generated Git command to match the approved plan exactly. Remote script tasks can include `script_sha256` so the executor verifies the approved script content before running it.
 
 Local Git execution uses the same intelligent Git planner as the CLI. Remote Git execution never accepts raw shell commands; it maps structured `operation` and `params` fields to whitelisted Git commands, runs them through SSH, and returns before/after snapshots, stdout, stderr, and exit code.
 
-Remote script execution is for backend-approved deployment or maintenance scripts. The executor sends the script over SSH stdin to `bash -s --` or `sh -s --`; it does not construct a shell command from free-form user text.
+Local script execution is for backend-approved work on the same machine as the executor, such as the server-b VM. The executor resolves `project_path` under `allowed-root`, verifies an optional `script_sha256`, runs the script through `bash -s --` or `sh -s --`, and uploads stdout, stderr, exit code, script hash, and duration. Remote script execution works the same way, but sends the script over SSH stdin to the target host.
 
 Example approved task:
 
@@ -378,6 +379,7 @@ dist/projectpilot-executor/
   bin/projectpilot-executor
   bin/projectpilot
   python/projectpilot/
+  examples/local-script-task.json
   examples/remote-script-task.json
   README_EXECUTOR.md
 ```
@@ -407,5 +409,20 @@ Example approved remote script task:
     },
     "args": []
   }
+}
+```
+
+Example approved local script task for the server-b executor:
+
+```json
+{
+  "id": "task_script_1",
+  "type": "run_local_script",
+  "approved": true,
+  "executor_id": "server-b",
+  "project_path": "/home/hzy/project/web",
+  "interpreter": "bash",
+  "script": "set -euo pipefail\npwd\ngit status --short\n",
+  "script_sha256": "expected_sha256_hex"
 }
 ```

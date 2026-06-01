@@ -176,6 +176,44 @@ class ExecutorBackendTests(unittest.TestCase):
             self.assertEqual(data["operation_logs"][0]["script_sha256"], "abc123")
             self.assertEqual(data["operation_logs"][0]["stdout_summary"], "ok\n")
 
+    def test_backend_store_records_local_script_operation_log(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = Path(temp_dir) / "backend.json"
+            store = ExecutorBackendStore(storage)
+            store.create_task(
+                {
+                    "id": "task_1",
+                    "type": "run_local_script",
+                    "project_path": "/home/hzy/project/web",
+                    "approved": True,
+                }
+            )
+            store.claim_next_task("server-b", ["run_local_script"])
+
+            store.complete_task(
+                "task_1",
+                {
+                    "executor_id": "server-b",
+                    "success": True,
+                    "result": {
+                        "success": True,
+                        "operation": "run_local_script",
+                        "command": "cd /home/hzy/project/web && bash -s --",
+                        "stdout": "ok\n",
+                        "stderr": "",
+                        "exit_code": 0,
+                        "script_sha256": "abc123",
+                        "script_size": 12,
+                    },
+                },
+            )
+
+            data = json.loads(storage.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["operation_logs"]), 1)
+            self.assertEqual(data["operation_logs"][0]["operation"], "run_local_script")
+            self.assertEqual(data["operation_logs"][0]["project_path"], "/home/hzy/project/web")
+            self.assertEqual(data["operation_logs"][0]["stdout_summary"], "ok\n")
+
     def test_enqueue_cli_writes_backend_task(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             storage = Path(temp_dir) / "backend.json"
