@@ -1,12 +1,34 @@
 from __future__ import annotations
 
 import json
-import shutil
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable, TextIO
+
+try:
+    from rich import box
+    from rich.align import Align
+    from rich.columns import Columns
+    from rich.console import Console, Group
+    from rich.json import JSON as RichJSON
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+
+    RICH_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised only in minimal environments.
+    box = None
+    Align = None
+    Columns = None
+    Console = None
+    Group = None
+    RichJSON = None
+    Panel = None
+    Table = None
+    Text = None
+    RICH_AVAILABLE = False
 
 
 @dataclass(frozen=True)
@@ -24,16 +46,6 @@ DEFAULT_BACKEND_PROFILE = BackendProfile(
     default_project_id=1,
     default_server_id=2,
 )
-
-RESET = "\033[0m"
-DIM = "\033[2m"
-BOLD = "\033[1m"
-CYAN = "\033[36m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-BLUE = "\033[34m"
-
 
 def request_backend_json(
     profile: BackendProfile,
@@ -105,7 +117,7 @@ def run_backend_console(
     prompt = input_fn or input
     if interactive is None:
         interactive = sys.stdin.isatty()
-    ui = ConsoleUI(stream, enable_color=interactive)
+    ui = ConsoleUI(stream, rich_enabled=interactive and RICH_AVAILABLE)
 
     ui.render_header(profile)
 
@@ -143,154 +155,318 @@ def run_backend_console(
 
 
 class ConsoleUI:
-    def __init__(self, stream: TextIO, *, enable_color: bool = False) -> None:
+    def __init__(self, stream: TextIO, *, rich_enabled: bool = False) -> None:
         self.stream = stream
-        self.enable_color = enable_color
-        self.width = max(72, min(96, shutil.get_terminal_size((88, 24)).columns))
-
-    def style(self, text: str, color: str) -> str:
-        if not self.enable_color:
-            return text
-        return f"{color}{text}{RESET}"
+        self.rich_enabled = bool(rich_enabled and RICH_AVAILABLE)
+        self.width = 96
+        self.console = (
+            Console(
+                file=stream,
+                force_terminal=self.rich_enabled,
+                color_system="auto" if self.rich_enabled else None,
+                width=self.width,
+            )
+            if RICH_AVAILABLE
+            else None
+        )
 
     def prompt(self, text: str) -> str:
-        return self.style(text, BOLD + CYAN)
+        return text
 
     def info(self, text: str) -> None:
-        print(self.style(text, DIM), file=self.stream)
+        if self.rich_enabled and self.console is not None:
+            self.console.print(Text(text, style="dim"))
+            return
+        print(text, file=self.stream)
 
     def warn(self, text: str) -> None:
-        print(self.style(f"Warning: {text}", YELLOW), file=self.stream)
+        if self.rich_enabled and self.console is not None:
+            self.console.print(Panel(Text(text, style="yellow"), title="Warning", border_style="yellow"))
+            return
+        print(f"Warning: {text}", file=self.stream)
 
     def error(self, text: str) -> None:
-        print(self.style(f"Error: {text}", RED), file=self.stream)
+        if self.rich_enabled and self.console is not None:
+            self.console.print(Panel(Text(text, style="red"), title="Error", border_style="red"))
+            return
+        print(f"Error: {text}", file=self.stream)
 
     def rule(self, title: str = "") -> None:
+        if self.rich_enabled and self.console is not None:
+            self.console.rule(title, style="dim cyan" if title else "dim")
+            return
         if title:
             label = f" {title} "
             remaining = max(2, self.width - len(label))
             left = remaining // 2
             right = remaining - left
-            print(self.style("-" * left + label + "-" * right, DIM), file=self.stream)
+            print("-" * left + label + "-" * right, file=self.stream)
         else:
-            print(self.style("-" * self.width, DIM), file=self.stream)
+            print("-" * self.width, file=self.stream)
 
     def render_header(self, profile: BackendProfile) -> None:
-        title = "ProjectPilot Backend Console"
-        subtitle = "Backend control plane for projects, servers, executor tasks"
-        print(self.style(title, BOLD + CYAN), file=self.stream)
-        print(self.style(subtitle, DIM), file=self.stream)
+        if self.rich_enabled and self.console is not None:
+            title = Text("ProjectPilot", style="bold cyan")
+            title.append("  Backend Control", style="bold white")
+            subtitle = Text("AI project command center for projects, servers, and executor tasks", style="dim")
+            meta = Table.grid(padding=(0, 2))
+            meta.add_column(style="bold", no_wrap=True)
+            meta.add_column()
+            meta.add_row("Backend", profile.server_url)
+            meta.add_row("Target", f"project {profile.default_project_id}  /  server {profile.default_server_id}")
+            meta.add_row("Executor", "start with `projectpilot executor server-b`")
+            self.console.print(
+                Panel(
+                    Group(title, subtitle, Text(""), meta),
+                    box=box.ROUNDED,
+                    border_style="cyan",
+                    padding=(1, 2),
+                )
+            )
+            return
+
+        print("ProjectPilot Backend Console", file=self.stream)
+        print("Backend control plane for projects, servers, executor tasks", file=self.stream)
         self.rule()
-        print(f"{self.style('Backend', BOLD)}        {profile.server_url}", file=self.stream)
-        print(
-            f"{self.style('Default target', BOLD)} {profile.default_project_id}:{profile.default_server_id}",
-            file=self.stream,
-        )
-        print(f"{self.style('Role', BOLD)}           Control console. Executor runs via `projectpilot executor server-b`.", file=self.stream)
+        print(f"Backend        {profile.server_url}", file=self.stream)
+        print(f"Default target {profile.default_project_id}:{profile.default_server_id}", file=self.stream)
+        print("Role           Control console. Executor runs via `projectpilot executor server-b`.", file=self.stream)
         print(file=self.stream)
 
     def render_menu(self) -> None:
-        self.rule("Actions")
         rows = [
             ("1", "Dashboard", "health, projects, servers, recent tasks"),
             ("2", "Health", "check backend availability"),
             ("3", "Projects", "list project bindings"),
             ("4", "Servers", "list server executors"),
-            ("5", "Tasks", "show queued/running/completed executor tasks"),
+            ("5", "Tasks", "queued, running, completed, failed"),
             ("6", "Detect", "trigger project/server detection"),
             ("0", "Exit", "leave the console"),
         ]
+        if self.rich_enabled and self.console is not None:
+            table = Table.grid(padding=(0, 2))
+            table.add_column(justify="right", style="bold cyan", no_wrap=True)
+            table.add_column(style="bold")
+            table.add_column(style="dim")
+            for key, label, detail in rows:
+                table.add_row(key, label, detail)
+            self.console.print(Panel(table, title="Actions", border_style="blue", box=box.ROUNDED))
+            return
+
+        self.rule("Actions")
         for key, label, detail in rows:
-            key_text = self.style(f"[{key}]", BOLD + BLUE)
-            print(f"  {key_text} {label:<10} {self.style(detail, DIM)}", file=self.stream)
+            print(f"  [{key}] {label:<10} {detail}", file=self.stream)
         print(file=self.stream)
+
+    def render_dashboard(self, profile: BackendProfile) -> None:
+        health = get_health(profile)
+        projects = list_projects(profile)
+        servers = list_servers(profile)
+        tasks = list_tasks(profile)
+
+        if self.rich_enabled and self.console is not None:
+            self.console.rule("Dashboard", style="cyan")
+            health_label = health.get("status", "unknown") if isinstance(health, dict) else "unknown"
+            health_style = "green" if health_label == "ok" else "yellow"
+            counts = count_task_statuses(tasks) if isinstance(tasks, list) else {}
+            cards = [
+                metric_card("Backend", str(health_label), "health", health_style),
+                metric_card("Projects", str(len(projects)) if isinstance(projects, list) else "-", "registered"),
+                metric_card("Servers", str(len(servers)) if isinstance(servers, list) else "-", "targets"),
+                metric_card(
+                    "Tasks",
+                    str(len(tasks)) if isinstance(tasks, list) else "-",
+                    f"queued {counts.get('queued', 0)} / failed {counts.get('failed', 0)}",
+                ),
+            ]
+            self.console.print(Columns(cards, equal=True, expand=True))
+            self.console.print()
+            self.render_tasks(tasks, limit=8, title="Recent Tasks")
+            return
+
+        self.rule("Dashboard")
+        health_label = health.get("status", "unknown") if isinstance(health, dict) else "unknown"
+        print(f"Health   {health_label}", file=self.stream)
+        print(f"Projects {len(projects) if isinstance(projects, list) else '-'}", file=self.stream)
+        print(f"Servers  {len(servers) if isinstance(servers, list) else '-'}", file=self.stream)
+        if isinstance(tasks, list):
+            counts = count_task_statuses(tasks)
+            print(
+                "Tasks    "
+                f"queued={counts.get('queued', 0)}  "
+                f"running={counts.get('running', 0)}  "
+                f"done={counts.get('succeeded', 0) + counts.get('completed', 0)}  "
+                f"failed={counts.get('failed', 0)}",
+                file=self.stream,
+            )
+        print(file=self.stream)
+        self.render_tasks(tasks, limit=8)
+
+    def render_json(self, data: Any) -> None:
+        if self.rich_enabled and self.console is not None:
+            self.console.print(Panel(RichJSON.from_data(data), title="Response", border_style="cyan"))
+            return
+        print(json.dumps(data, ensure_ascii=False, indent=2), file=self.stream)
+
+    def render_projects(self, data: Any) -> None:
+        if not isinstance(data, list):
+            self.render_json(data)
+            return
+        if self.rich_enabled and self.console is not None:
+            table = Table(title="Projects", box=box.ROUNDED, border_style="cyan")
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Name", style="bold")
+            table.add_column("Path", style="dim")
+            table.add_column("Description", style="dim")
+            for project in data:
+                table.add_row(
+                    str(project.get("id") or ""),
+                    str(project.get("name") or ""),
+                    str(project.get("path") or ""),
+                    str(project.get("description") or ""),
+                )
+            self.console.print(table if data else Panel("No projects.", border_style="cyan"))
+            return
+        self.render_plain_projects(data)
+
+    def render_servers(self, data: Any) -> None:
+        if not isinstance(data, list):
+            self.render_json(data)
+            return
+        if self.rich_enabled and self.console is not None:
+            table = Table(title="Servers", box=box.ROUNDED, border_style="cyan")
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Name", style="bold")
+            table.add_column("Mode")
+            table.add_column("Host", style="dim")
+            table.add_column("User", style="dim")
+            for server in data:
+                table.add_row(
+                    str(server.get("id") or ""),
+                    str(server.get("name") or ""),
+                    str(server.get("connection_mode") or ""),
+                    str(server.get("host") or ""),
+                    str(server.get("username") or ""),
+                )
+            self.console.print(table if data else Panel("No servers.", border_style="cyan"))
+            return
+        self.render_plain_servers(data)
+
+    def render_tasks(self, data: Any, limit: int = 20, title: str = "Executor Tasks") -> None:
+        if not isinstance(data, list):
+            self.render_json(data)
+            return
+        if self.rich_enabled and self.console is not None:
+            counts = count_task_statuses(data)
+            summary = "  ".join(f"{key} {value}" for key, value in sorted(counts.items())) or "empty"
+            table = Table(title=f"{title}  ({summary})", box=box.ROUNDED, border_style="cyan")
+            table.add_column("Status", no_wrap=True)
+            table.add_column("Type")
+            table.add_column("Executor")
+            table.add_column("Task", style="dim")
+            for task in data[:limit]:
+                task_type = str(task.get("task_type") or task.get("type") or "")
+                status = str(task.get("status") or "unknown")
+                table.add_row(
+                    Text(status, style=task_status_style(status)),
+                    task_type,
+                    str(task.get("executor_id") or ""),
+                    str(task.get("id") or ""),
+                )
+            if len(data) > limit:
+                table.caption = f"{len(data) - limit} more tasks hidden"
+            self.console.print(table if data else Panel("No executor tasks.", border_style="cyan"))
+            return
+        self.render_plain_tasks(data, limit=limit)
+
+    def render_plain_projects(self, data: list[Any]) -> None:
+        if not data:
+            print("No projects.", file=self.stream)
+            return
+        print(f"{'ID':<5} {'Name':<22} Path", file=self.stream)
+        print(f"{'-' * 5} {'-' * 22} {'-' * 36}", file=self.stream)
+        for project in data:
+            print(f"{str(project.get('id')):<5} {clip(project.get('name'), 22):<22} {project.get('path')}", file=self.stream)
+
+    def render_plain_servers(self, data: list[Any]) -> None:
+        if not data:
+            print("No servers.", file=self.stream)
+            return
+        print(f"{'ID':<5} {'Name':<18} {'Mode':<12} Host", file=self.stream)
+        print(f"{'-' * 5} {'-' * 18} {'-' * 12} {'-' * 30}", file=self.stream)
+        for server in data:
+            print(
+                f"{str(server.get('id')):<5} {clip(server.get('name'), 18):<18} "
+                f"{clip(server.get('connection_mode'), 12):<12} {server.get('host')}",
+                file=self.stream,
+            )
+
+    def render_plain_tasks(self, data: list[Any], limit: int = 20) -> None:
+        if not data:
+            print("No executor tasks.", file=self.stream)
+            return
+        counts = count_task_statuses(data)
+        summary = "  ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+        print(f"Summary: {summary}", file=self.stream)
+        print(file=self.stream)
+        print(f"{'Status':<10} {'Type':<20} {'Executor':<12} Task", file=self.stream)
+        print(f"{'-' * 10} {'-' * 20} {'-' * 12} {'-' * 28}", file=self.stream)
+        for task in data[:limit]:
+            task_type = task.get("task_type") or task.get("type")
+            print(
+                f"{clip(task.get('status'), 10):<10} {clip(task_type, 20):<20} "
+                f"{clip(task.get('executor_id'), 12):<12} {task.get('id')}",
+                file=self.stream,
+            )
+        if len(data) > limit:
+            print(f"... {len(data) - limit} more tasks", file=self.stream)
 
 
 def render_dashboard(profile: BackendProfile, stream: TextIO, ui: ConsoleUI) -> None:
-    ui.rule("Dashboard")
-    health = get_health(profile)
-    projects = list_projects(profile)
-    servers = list_servers(profile)
-    tasks = list_tasks(profile)
-
-    health_label = health.get("status", "unknown") if isinstance(health, dict) else "unknown"
-    health_color = GREEN if health_label == "ok" else YELLOW
-    print(f"Health   {ui.style(str(health_label), BOLD + health_color)}", file=stream)
-    print(f"Projects {len(projects) if isinstance(projects, list) else '-'}", file=stream)
-    print(f"Servers  {len(servers) if isinstance(servers, list) else '-'}", file=stream)
-    if isinstance(tasks, list):
-        counts = count_task_statuses(tasks)
-        print(
-            "Tasks    "
-            f"queued={counts.get('queued', 0)}  "
-            f"running={counts.get('running', 0)}  "
-            f"done={counts.get('succeeded', 0) + counts.get('completed', 0)}  "
-            f"failed={counts.get('failed', 0)}",
-            file=stream,
-        )
-    print(file=stream)
-    print_tasks(tasks, stream, limit=8)
+    ui.render_dashboard(profile)
 
 
 def print_json(data: Any, stream: TextIO) -> None:
-    print(json.dumps(data, ensure_ascii=False, indent=2), file=stream)
+    ConsoleUI(stream, rich_enabled=stream_is_tty(stream) and RICH_AVAILABLE).render_json(data)
 
 
 def print_projects(data: Any, stream: TextIO) -> None:
-    if not isinstance(data, list):
-        print_json(data, stream)
-        return
-    if not data:
-        print("No projects.", file=stream)
-        return
-    print(f"{'ID':<5} {'Name':<22} Path", file=stream)
-    print(f"{'-' * 5} {'-' * 22} {'-' * 36}", file=stream)
-    for project in data:
-        print(
-            f"{str(project.get('id')):<5} {clip(project.get('name'), 22):<22} {project.get('path')}",
-            file=stream,
-        )
+    ConsoleUI(stream, rich_enabled=stream_is_tty(stream) and RICH_AVAILABLE).render_projects(data)
 
 
 def print_servers(data: Any, stream: TextIO) -> None:
-    if not isinstance(data, list):
-        print_json(data, stream)
-        return
-    if not data:
-        print("No servers.", file=stream)
-        return
-    print(f"{'ID':<5} {'Name':<18} {'Mode':<12} Host", file=stream)
-    print(f"{'-' * 5} {'-' * 18} {'-' * 12} {'-' * 30}", file=stream)
-    for server in data:
-        print(
-            f"{str(server.get('id')):<5} {clip(server.get('name'), 18):<18} "
-            f"{clip(server.get('connection_mode'), 12):<12} {server.get('host')}",
-            file=stream,
-        )
+    ConsoleUI(stream, rich_enabled=stream_is_tty(stream) and RICH_AVAILABLE).render_servers(data)
 
 
 def print_tasks(data: Any, stream: TextIO, limit: int = 20) -> None:
-    if not isinstance(data, list):
-        print_json(data, stream)
-        return
-    if not data:
-        print("No executor tasks.", file=stream)
-        return
-    counts = count_task_statuses(data)
-    summary = "  ".join(f"{key}={value}" for key, value in sorted(counts.items()))
-    print(f"Summary: {summary}", file=stream)
-    print(file=stream)
-    print(f"{'Status':<10} {'Type':<20} {'Executor':<12} Task", file=stream)
-    print(f"{'-' * 10} {'-' * 20} {'-' * 12} {'-' * 28}", file=stream)
-    for task in data[:limit]:
-        task_type = task.get("task_type") or task.get("type")
-        print(
-            f"{clip(task.get('status'), 10):<10} {clip(task_type, 20):<20} "
-            f"{clip(task.get('executor_id'), 12):<12} {task.get('id')}",
-            file=stream,
-        )
-    if len(data) > limit:
-        print(f"... {len(data) - limit} more tasks", file=stream)
+    ConsoleUI(stream, rich_enabled=stream_is_tty(stream) and RICH_AVAILABLE).render_tasks(data, limit=limit)
+
+
+def metric_card(label: str, value: str, caption: str, style: str = "cyan") -> Any:
+    body = Group(
+        Align.center(Text(value, style=f"bold {style}")),
+        Align.center(Text(label, style="bold")),
+        Align.center(Text(caption, style="dim")),
+    )
+    return Panel(body, box=box.ROUNDED, border_style=style, padding=(1, 2))
+
+
+def task_status_style(status: str) -> str:
+    normalized = status.lower()
+    if normalized in {"succeeded", "completed", "success", "done"}:
+        return "green"
+    if normalized in {"running", "claimed", "in_progress"}:
+        return "cyan"
+    if normalized in {"queued", "pending"}:
+        return "yellow"
+    if normalized in {"failed", "error"}:
+        return "red"
+    return "dim"
+
+
+def stream_is_tty(stream: TextIO) -> bool:
+    isatty = getattr(stream, "isatty", None)
+    return bool(isatty and isatty())
 
 
 def count_task_statuses(tasks: list[Any]) -> dict[str, int]:

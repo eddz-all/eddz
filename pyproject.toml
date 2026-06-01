@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 authors = [
   { name = "ProjectPilot" }
 ]
-dependencies = []
+dependencies = ["rich>=13.7"]
 keywords = ["git", "cli", "developer-tools", "project-management"]
 classifiers = [
   "Development Status :: 3 - Alpha",
