@@ -84,13 +84,20 @@ This directory is a self-contained ProjectPilot Executor bundle.
 ./bin/projectpilot-executor ssh-hosts --json
 ```
 
-On the server-b Ubuntu VM, `./bin/projectpilot` starts the built-in executor profile directly:
+`./bin/projectpilot` is the backend control console for humans:
 
 ```bash
 ./bin/projectpilot
+./bin/projectpilot backend --json health
 ```
 
-Built-in profile:
+On the server-b Ubuntu VM, start the built-in executor profile explicitly:
+
+```bash
+./bin/projectpilot executor server-b
+```
+
+Executor profile:
 
 ```text
 server_url: https://printable-played-chances-response.trycloudflare.com

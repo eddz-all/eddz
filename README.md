@@ -186,7 +186,25 @@ dist/ProjectPilot Executor Native.app
 
 The native app opens a SwiftUI window for saving connection settings, choosing the allowed root folder, running one poll, and starting or stopping the executor loop. The browser app remains available through `projectpilot executor app` as a lightweight fallback.
 
-For polling-mode integration, configure this machine once:
+ProjectPilot has two roles:
+
+```text
+projectpilot                  opens the backend control console for humans
+projectpilot executor ...      runs the executor on a machine that receives backend tasks
+```
+
+The default backend console connects to the teammate backend profile:
+
+```bash
+projectpilot
+projectpilot backend --json health
+projectpilot backend projects
+projectpilot backend servers
+projectpilot backend tasks
+projectpilot backend detect --project-id 1 --server-id 2
+```
+
+For polling-mode executor integration, configure this machine once:
 
 ```bash
 projectpilot executor setup \
@@ -209,10 +227,10 @@ For backend development, process one task and exit:
 projectpilot executor connect --once --json
 ```
 
-On the server-b Ubuntu VM, the teammate backend profile is built in. After installing the package, this starts the executor directly:
+On the server-b Ubuntu VM, the teammate executor profile is built in. After installing the package, start the executor explicitly:
 
 ```bash
-projectpilot
+projectpilot executor server-b
 ```
 
 The built-in profile uses:

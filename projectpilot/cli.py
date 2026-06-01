@@ -10,6 +10,20 @@ from pathlib import Path
 from typing import Any
 
 from projectpilot import __version__
+from projectpilot.backend_console import (
+    DEFAULT_BACKEND_PROFILE,
+    BackendProfile,
+    get_health,
+    list_projects,
+    list_servers,
+    list_tasks,
+    print_json,
+    print_projects,
+    print_servers,
+    print_tasks,
+    run_backend_console,
+    trigger_detect,
+)
 from projectpilot.executor.app import run_executor_app
 from projectpilot.executor.backend import (
     ExecutorBackendStore,
@@ -85,8 +99,8 @@ SERVER_B_EXECUTOR_PROFILE = {
 
 def main(argv: list[str] | None = None) -> int:
     raw_args = list(sys.argv[1:] if argv is None else argv)
-    if not raw_args and should_start_server_b_profile():
-        return start_server_b_executor_profile()
+    if not raw_args:
+        return handle_default_backend_console()
 
     parser = build_parser()
     args = parser.parse_args(raw_args)
@@ -109,11 +123,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
-def should_start_server_b_profile() -> bool:
-    return Path(str(SERVER_B_EXECUTOR_PROFILE["allowed_root"])).expanduser().exists()
+def handle_default_backend_console() -> int:
+    run_backend_console(DEFAULT_BACKEND_PROFILE)
+    return 0
 
 
-def start_server_b_executor_profile() -> int:
+def start_server_b_executor_profile(*, once: bool = False, timeout: int = 15, json_output: bool = False) -> int:
     config = build_config(
         server_url=str(SERVER_B_EXECUTOR_PROFILE["server_url"]),
         token=str(SERVER_B_EXECUTOR_PROFILE["token"]),
@@ -122,6 +137,11 @@ def start_server_b_executor_profile() -> int:
         interval=float(SERVER_B_EXECUTOR_PROFILE["interval"]),
         mode=str(SERVER_B_EXECUTOR_PROFILE["mode"]),
     )
+    if once and json_output:
+        result = poll_and_run_once(config, timeout=timeout)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
     project_path = Path(str(SERVER_B_EXECUTOR_PROFILE["project_path"]))
     print("ProjectPilot server-b executor profile")
     print(f"Backend: {config.server_url}")
@@ -130,7 +150,7 @@ def start_server_b_executor_profile() -> int:
     print(f"Project path: {project_path}")
     print(f"Project path exists: {'yes' if project_path.exists() else 'no'}")
     print()
-    run_connect_loop(config)
+    run_connect_loop(config, once=once, timeout=timeout)
     return 0
 
 
@@ -403,8 +423,53 @@ def build_parser() -> argparse.ArgumentParser:
     add_path_argument(quickstart_command)
     quickstart_command.set_defaults(handler=handle_git_quickstart)
 
+    backend_parser = subparsers.add_parser("backend", help="Use the ProjectPilot backend control API.")
+    backend_parser.add_argument(
+        "--server-url",
+        default=DEFAULT_BACKEND_PROFILE.server_url,
+        help="Backend base URL.",
+    )
+    backend_parser.add_argument(
+        "--token",
+        default=DEFAULT_BACKEND_PROFILE.token,
+        help="Backend API token. Defaults to the development token.",
+    )
+    backend_parser.add_argument("--timeout", type=int, default=15, help="HTTP timeout in seconds.")
+    backend_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    backend_parser.set_defaults(handler=handle_backend_command)
+    backend_subparsers = backend_parser.add_subparsers(dest="backend_command")
+
+    backend_console_command = backend_subparsers.add_parser("console", help="Open the backend control console.")
+    backend_console_command.set_defaults(handler=handle_backend_command)
+
+    backend_health_command = backend_subparsers.add_parser("health", help="Check backend health.")
+    backend_health_command.set_defaults(handler=handle_backend_command)
+
+    backend_projects_command = backend_subparsers.add_parser("projects", help="List backend projects.")
+    backend_projects_command.set_defaults(handler=handle_backend_command)
+
+    backend_servers_command = backend_subparsers.add_parser("servers", help="List backend servers.")
+    backend_servers_command.set_defaults(handler=handle_backend_command)
+
+    backend_tasks_command = backend_subparsers.add_parser("tasks", help="List executor tasks from the backend.")
+    backend_tasks_command.set_defaults(handler=handle_backend_command)
+
+    backend_detect_command = backend_subparsers.add_parser("detect", help="Trigger project/server detection.")
+    backend_detect_command.add_argument("--project-id", type=int, help="Project id. Defaults to the built-in profile.")
+    backend_detect_command.add_argument("--server-id", type=int, help="Server id. Defaults to the built-in profile.")
+    backend_detect_command.set_defaults(handler=handle_backend_command)
+
     executor_parser = subparsers.add_parser("executor", help="Connect this machine to a ProjectPilot backend.")
     executor_subparsers = executor_parser.add_subparsers(dest="executor_command")
+
+    server_b_command = executor_subparsers.add_parser(
+        "server-b",
+        help="Start the built-in server-b executor profile.",
+    )
+    server_b_command.add_argument("--timeout", type=int, default=15, help="HTTP timeout in seconds.")
+    server_b_command.add_argument("--once", action="store_true", help="Poll and process at most one task.")
+    server_b_command.add_argument("--json", action="store_true", help="Print machine-readable JSON for --once.")
+    server_b_command.set_defaults(handler=handle_executor_server_b)
 
     setup_command = executor_subparsers.add_parser(
         "setup",
@@ -599,6 +664,52 @@ def add_executor_config_argument(parser: argparse.ArgumentParser) -> None:
         type=Path,
         help="Executor config path. Defaults to ~/.projectpilot/executor.json.",
     )
+
+
+def handle_backend_command(args: argparse.Namespace) -> int:
+    profile = BackendProfile(
+        server_url=args.server_url,
+        token=args.token,
+        default_project_id=DEFAULT_BACKEND_PROFILE.default_project_id,
+        default_server_id=DEFAULT_BACKEND_PROFILE.default_server_id,
+        timeout=args.timeout,
+    )
+    command = args.backend_command or "console"
+
+    if command == "console":
+        run_backend_console(profile)
+        return 0
+    if command == "health":
+        data = get_health(profile)
+        print_backend_data(data, args.json, print_json)
+        return 0
+    if command == "projects":
+        data = list_projects(profile)
+        print_backend_data(data, args.json, print_projects)
+        return 0
+    if command == "servers":
+        data = list_servers(profile)
+        print_backend_data(data, args.json, print_servers)
+        return 0
+    if command == "tasks":
+        data = list_tasks(profile)
+        print_backend_data(data, args.json, print_tasks)
+        return 0
+    if command == "detect":
+        project_id = args.project_id or profile.default_project_id
+        server_id = args.server_id or profile.default_server_id
+        data = trigger_detect(profile, project_id, server_id)
+        print_backend_data(data, args.json, print_json)
+        return 0
+
+    raise ValueError(f"Unknown backend command: {command}")
+
+
+def print_backend_data(data: Any, as_json: bool, render: Any) -> None:
+    if as_json:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    render(data, sys.stdout)
 
 
 def handle_git_status(args: argparse.Namespace) -> int:
@@ -1103,6 +1214,14 @@ def handle_executor_connect(args: argparse.Namespace) -> int:
 
     run_connect_loop(config, once=args.once, timeout=args.timeout)
     return 0
+
+
+def handle_executor_server_b(args: argparse.Namespace) -> int:
+    return start_server_b_executor_profile(
+        once=args.once,
+        timeout=args.timeout,
+        json_output=args.json,
+    )
 
 
 def handle_executor_app(args: argparse.Namespace) -> int:
