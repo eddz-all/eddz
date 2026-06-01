@@ -125,6 +125,106 @@ class ExecutorTests(unittest.TestCase):
             self.assertFalse(result["success"])
             self.assertEqual(result["error_type"], "unsupported_task")
 
+    def test_execute_task_rejects_unapproved_git_operation(self) -> None:
+        with git_repo() as repo:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=repo.parent,
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "apply_git_operation",
+                    "project_path": str(repo),
+                    "operation": "pull",
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "approval_required")
+
+    def test_execute_task_applies_approved_local_git_add(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=repo.parent,
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "apply_git_operation",
+                    "project_path": str(repo),
+                    "approved": True,
+                    "operation": "add",
+                    "expected_command": ["git", "add", "--", "projectpilot/feature.py"],
+                },
+                config,
+            )
+            staged = run(["git", "diff", "--cached", "--name-only"], repo).stdout.splitlines()
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["operation"], "add")
+            self.assertIn("projectpilot/feature.py", staged)
+
+    def test_execute_task_rejects_local_git_command_mismatch(self) -> None:
+        with git_repo() as repo:
+            (repo / "projectpilot").mkdir()
+            (repo / "projectpilot" / "feature.py").write_text("print('ok')\n", encoding="utf-8")
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=repo.parent,
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "apply_git_operation",
+                    "project_path": str(repo),
+                    "approved": True,
+                    "operation": "add",
+                    "expected_command": ["git", "add", "--", "other.py"],
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "command_mismatch")
+
+    def test_execute_task_rejects_invalid_local_git_params(self) -> None:
+        with git_repo() as repo:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=repo.parent,
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "apply_git_operation",
+                    "project_path": str(repo),
+                    "approved": True,
+                    "operation": "pull",
+                    "params": ["not", "an", "object"],
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "git_operation_failed")
+
     def test_execute_task_runs_remote_connection_check(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = ExecutorConfig(
@@ -145,7 +245,7 @@ class ExecutorTests(unittest.TestCase):
                 result = execute_task({"id": "task_1", "type": "check_connection", "ssh_host": "dev-server"}, config)
 
             self.assertTrue(result["success"])
-            check_connection.assert_called_once_with("dev-server", timeout=20)
+            check_connection.assert_called_once_with("dev-server", timeout=20, auth_mode="key")
 
     def test_execute_task_runs_remote_git_detection(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -174,7 +274,69 @@ class ExecutorTests(unittest.TestCase):
                 )
 
             self.assertTrue(result["success"])
-            detect_remote_git_status.assert_called_once_with("prod-server", "/srv/app", timeout=20)
+            detect_remote_git_status.assert_called_once_with("prod-server", "/srv/app", timeout=20, auth_mode="key")
+
+    def test_execute_task_rejects_unapproved_remote_git_operation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "apply_remote_git_operation",
+                    "ssh_host": "prod-server",
+                    "project_path": "/srv/app",
+                    "operation": "pull",
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "approval_required")
+
+    def test_execute_task_runs_approved_remote_git_operation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            with patch("projectpilot.executor.client.apply_remote_git_operation") as apply_remote_git_operation:
+                apply_remote_git_operation.return_value = {
+                    "success": True,
+                    "operation": "pull",
+                    "command": ["git", "pull", "--ff-only"],
+                }
+                result = execute_task(
+                    {
+                        "id": "task_1",
+                        "type": "apply_remote_git_operation",
+                        "ssh_host": "prod-server",
+                        "project_path": "/srv/app",
+                        "approved": True,
+                        "operation": "pull",
+                        "expected_command": ["git", "pull", "--ff-only"],
+                    },
+                    config,
+                )
+
+            self.assertTrue(result["success"])
+            apply_remote_git_operation.assert_called_once_with(
+                "prod-server",
+                "/srv/app",
+                operation="pull",
+                params={},
+                expected_command=["git", "pull", "--ff-only"],
+                timeout=20,
+                auth_mode="key",
+            )
 
     def test_poll_and_run_once_uploads_detection_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -199,14 +361,184 @@ class ExecutorTests(unittest.TestCase):
                 self.assertEqual(state["auth"], ["Bearer secret", "Bearer secret"])
                 self.assertEqual(state["poll_payloads"][0]["executor_id"], "eddz-mac-local")
                 self.assertEqual(state["poll_payloads"][0]["mode"], "local")
+                self.assertIn("smart_git_analyze", state["poll_payloads"][0]["capabilities"])
                 self.assertIn("detect_remote_git_status", state["poll_payloads"][0]["capabilities"])
+                self.assertIn("apply_git_operation", state["poll_payloads"][0]["capabilities"])
+                self.assertIn("apply_remote_git_operation", state["poll_payloads"][0]["capabilities"])
+                self.assertIn("run_remote_script", state["poll_payloads"][0]["capabilities"])
                 self.assertEqual(state["result_payloads"][0]["task_id"], "task_1")
                 self.assertTrue(state["result_payloads"][0]["success"])
+                self.assertIn("started_at", state["result_payloads"][0])
+                self.assertIn("finished_at", state["result_payloads"][0])
+                self.assertIn("duration_ms", state["result_payloads"][0])
                 self.assertTrue(state["result_payloads"][0]["result"]["success"])
+                self.assertEqual(state["result_payloads"][0]["result"]["task_id"], "task_1")
                 self.assertIn("os", state["result_payloads"][0]["result"])
             finally:
                 server.shutdown()
                 server.server_close()
+
+    def test_execute_task_runs_smart_git_analysis(self) -> None:
+        with git_repo() as repo:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="dev-server-agent",
+                allowed_root=repo.parent,
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "smart_git_analyze",
+                    "project_path": str(repo),
+                    "analyses": ["map", "sync-plan"],
+                },
+                config,
+            )
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["schema_version"], "smart-git.v1")
+            self.assertEqual(result["branch"], "main")
+            self.assertIn("map", result["reports"])
+            self.assertIn("sync_plan", result["reports"])
+
+    def test_execute_task_rejects_invalid_smart_git_analyses(self) -> None:
+        with git_repo() as repo:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="dev-server-agent",
+                allowed_root=repo.parent,
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "smart_git_analyze",
+                    "project_path": str(repo),
+                    "analyses": "map",
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "invalid_analyses")
+
+    def test_execute_task_rejects_remote_path_outside_task_allowed_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "detect_remote_git_status",
+                    "ssh_host": "prod-server",
+                    "project_path": "/srv/other",
+                    "allowed_paths": ["/srv/app"],
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "path_not_allowed")
+
+    def test_execute_task_rejects_unapproved_remote_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            result = execute_task(
+                {
+                    "id": "task_1",
+                    "type": "run_remote_script",
+                    "ssh_host": "prod-server",
+                    "project_path": "/srv/app",
+                    "script": "echo hello\n",
+                },
+                config,
+            )
+
+            self.assertFalse(result["success"])
+            self.assertEqual(result["error_type"], "approval_required")
+
+    def test_execute_task_runs_approved_remote_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            with patch("projectpilot.executor.client.run_remote_script") as run_remote_script:
+                run_remote_script.return_value = {
+                    "success": True,
+                    "operation": "run_remote_script",
+                    "exit_code": 0,
+                }
+                result = execute_task(
+                    {
+                        "id": "task_1",
+                        "type": "run_remote_script",
+                        "ssh_host": "prod-server",
+                        "project_path": "/srv/app",
+                        "approved": True,
+                        "script": "echo hello\n",
+                        "script_sha256": "abc",
+                        "params": {"env": {"APP_ENV": "test"}, "args": ["one"]},
+                    },
+                    config,
+                )
+
+            self.assertTrue(result["success"])
+            run_remote_script.assert_called_once_with(
+                "prod-server",
+                "echo hello\n",
+                project_path="/srv/app",
+                interpreter="bash",
+                args=["one"],
+                env={"APP_ENV": "test"},
+                expected_sha256="abc",
+                auth_mode="key",
+                timeout=20,
+            )
+
+    def test_execute_task_passes_password_auth_mode_to_remote_script(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExecutorConfig(
+                server_url="http://127.0.0.1:8000",
+                token="secret",
+                executor_id="eddz-mac-local",
+                allowed_root=Path(temp_dir),
+            )
+
+            with patch("projectpilot.executor.client.run_remote_script") as run_remote_script:
+                run_remote_script.return_value = {"success": True, "exit_code": 0}
+                result = execute_task(
+                    {
+                        "id": "task_1",
+                        "type": "run_remote_script",
+                        "ssh_host": "ubuntu",
+                        "project_path": "/home/hzy",
+                        "approved": True,
+                        "script": "whoami\n",
+                        "ssh_auth_mode": "password",
+                    },
+                    config,
+                )
+
+            self.assertTrue(result["success"])
+            self.assertEqual(run_remote_script.call_args.kwargs["auth_mode"], "password")
 
     def test_ssh_hosts_cli_lists_config_hosts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

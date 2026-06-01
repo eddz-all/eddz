@@ -1,0 +1,39 @@
+/goal
+目标：在现有 ProjectPilot 项目中完成 Executor 主链的接入，优先做出可运行、可审计、可扩展的最小闭环，不破坏现有本地 Git 检测、智能 Git Doctor、审计记录、后端接口和已有产品方案边界。
+
+完成标准：
+1. 保留现有 ProjectPilot 代码结构、已有 CLI/检测/智能 Git/审计能力，不要为了接入 Executor 删除或弱化已有功能。
+2. Executor 只作为受控执行器，不是第二个 AI；AI Planner 只生成分析、计划、风险和回滚建议，不能直接持有 SSH 私钥或自由执行 shell。
+3. 优先实现第一阶段闭环：executor 配置、executor_id、token、allowed_root、/executor/poll、/executor/tasks/{task_id}/result、任务拉取、结果上传、状态记录。
+4. Executor 任务类型先限定在白名单内：check_connection、detect_git、detect_environment、detect_remote_git_status、detect_remote_environment、apply_git_operation、apply_remote_git_operation。
+5. 不接受 raw shell 任意命令；所有本地和远程执行都必须由任务类型、operation 和 params 生成受控命令。
+6. 本地任务必须校验 project_path 位于 allowed_root 内；远程任务必须使用 ssh_host 和绝对 project_path，并预留 allowed_paths 校验。
+7. SSH 连接第一版优先调用系统 ssh；扫描 ~/.ssh/config 时只提取可见 Host 别名，真实配置展开交给 ssh -G，不要手写完整 OpenSSH 配置解析器。
+8. SSH 私钥不能交给 AI Planner；Local Executor 优先复用系统 ssh-agent/Keychain；Central Executor 可以使用受控密钥路径，但必须限制权限、服务器范围和审计。
+9. check_connection 使用安全连接测试，例如 BatchMode、ConnectTimeout 和 echo projectpilot-ok，并返回结构化 success、connected、ssh_host、latency_ms、error_type、message。
+10. Git 检测要返回结构化状态，包括 branch、upstream、remote_url、ahead、behind、is_clean、has_uncommitted_changes、state、staged_count、unstaged_count、untracked_count、conflicted_count、last_commit、raw_data。
+11. 不要把旧快照、latched 状态或上一次任务结果误当成当前任务结果；每次检测和执行都必须产生本次 task_id 对应的新结果和时间戳。
+12. apply_git_operation 和 apply_remote_git_operation 必须要求 approved: true；如果后端传 expected_command，Executor 生成的命令必须与 expected_command 逐字匹配后才执行。
+13. 第一阶段允许的 Git 执行只包括安全白名单，例如 git fetch、git pull --ff-only、git push；dirty、conflict、diverged、no_upstream 等状态不得自动 pull/push。
+14. 默认禁止 git reset --hard、git clean -fd、git push --force、自动 rebase、未审批 merge、任意删除文件、自动修改服务器配置。
+15. 远程环境检测只做只读采集，覆盖 OS、架构、Python、Node、npm、Docker、Docker daemon、Docker Compose、磁盘、项目路径存在性、CUDA/GPU 可用性；命令失败要结构化记录，不要让单项失败导致整次检测完全不可用。
+16. 结果上传必须包含 task_id、executor_id、success、result 或 error_type/message，并尽量保留 stdout、stderr、exit_code、started_at、finished_at、duration_ms 等审计字段。
+17. 数据库或本地存储中的 ExecutorTask、GitStatus、EnvironmentSnapshot、OperationLog 字段要与两篇方案文档保持兼容；新增字段可以向后兼容，但不要破坏旧字段。
+18. 后端仍然是控制中心，负责权限、审批、任务创建、状态流转和审计；Executor 不能绕过后端直接替用户做最终决策。
+19. Central Executor 是主模式，Local Executor 是补充模式；实现时可以先抽象 mode 字段和配置结构，不要求一次完成所有 GUI 管理能力。
+20. 每次修改后说明改了哪些文件、为什么改、是否会影响现有功能，以及还有哪些 Executor 能力未完成。
+21. 可以编译和测试通过；不能为了通过编译删除关键功能、降低安全校验、跳过审批模型或移除审计记录。
+22. 修改完成后至少运行与本次改动相关的测试或最小验证命令；如果无法运行，要明确说明原因和剩余风险。
+
+实现优先级：
+1. 先读现有项目结构、README、pyproject、tests 和相关 Git/审计模块，确认当前技术栈和已有能力。
+2. 再设计最小 Executor 配置模型、任务模型和命令白名单，不引入与现有风格冲突的大型重构。
+3. 然后实现 poll/result 主链、只读检测任务和结构化结果。
+4. 最后接入受控 Git 执行任务，并补充测试和文档说明。
+
+硬性边界：
+1. 不让 AI Planner 直接读取私钥、拼接任意 shell 或跳过审批。
+2. 不让 Executor 执行未批准、未白名单、路径越界、服务器越权或 expected_command 不匹配的任务。
+3. 不删除现有三类核心能力：本地状态检测、智能 Git 建议/执行边界、审计记录。
+4. 不把 Docker/环境配置高风险操作提前做成自动执行；第一阶段可以生成建议或只读检测。
+5. 不用“临时能跑”牺牲安全模型；Executor 的最小闭环必须从一开始就是受控、可追踪、可回滚优先。

@@ -24,6 +24,7 @@ classifiers = [
 
 [project.scripts]
 projectpilot = "projectpilot.cli:main"
+projectpilot-executor = "projectpilot.executor.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["projectpilot*"]

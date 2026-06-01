@@ -38,7 +38,7 @@ private struct HeaderView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("ProjectPilot Executor")
                     .font(.title2.bold())
-                Text(store.isRunning ? "Connected and polling for read-only tasks." : "Ready to connect to the backend.")
+                Text(store.isRunning ? "Connected and polling for approved tasks." : "Ready to connect to the backend.")
                     .foregroundStyle(.secondary)
             }
 

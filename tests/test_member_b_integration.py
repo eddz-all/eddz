@@ -27,6 +27,7 @@ class MemberBIntegrationTests(unittest.TestCase):
         self.assertFalse(result["has_uncommitted_changes"])
         self.assertTrue(result["is_clean"])
         self.assertTrue(result["last_commit"].endswith(" initial"))
+        self.assertIn("git_status", result["raw_data"])
 
     def test_local_git_status_reports_dirty_repository(self) -> None:
         with git_repo() as repo:

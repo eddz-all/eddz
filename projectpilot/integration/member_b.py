@@ -37,6 +37,9 @@ def detect_local_git_status(project_path: str) -> dict[str, Any]:
             "untracked_count": len(status.untracked_files),
             "conflicted_count": len(status.conflicted_files),
             "last_commit": last_commit,
+            "raw_data": {
+                "git_status": status.to_dict(),
+            },
         }
     except NotGitRepositoryError:
         return _failure("not_git_repository", "The target path is not a Git repository.")

@@ -4,11 +4,19 @@ import argparse
 from getpass import getpass
 import json
 import sys
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
 from projectpilot import __version__
 from projectpilot.executor.app import run_executor_app
+from projectpilot.executor.backend import (
+    ExecutorBackendStore,
+    create_executor_backend_server,
+    default_backend_storage_path,
+    run_executor_backend,
+)
 from projectpilot.executor.client import poll_and_run_once, run_connect_loop
 from projectpilot.executor.config import build_config, default_config_path, load_config, save_config
 from projectpilot.executor.remote import list_ssh_hosts, resolve_ssh_host
@@ -45,6 +53,9 @@ from projectpilot.git.safe_executor import (
     run_switch,
     run_tag,
 )
+from projectpilot.git.state_map import build_state_map
+from projectpilot.git.sync_planner import build_sync_plan
+from projectpilot.integration.smart_git import analyze_repository
 from projectpilot.models.audit_log import AuditEntry
 from projectpilot.models.commit_plan import CommitPlan, CommitPlanItem
 from projectpilot.models.doctor import DoctorReport
@@ -306,6 +317,36 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     doctor_command.set_defaults(handler=handle_git_doctor)
 
+    map_command = git_subparsers.add_parser(
+        "map",
+        help="Show the Git state map across working tree, staged files, local commits, and remote.",
+    )
+    add_path_argument(map_command)
+    map_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    map_command.set_defaults(handler=handle_git_map)
+
+    sync_plan_command = git_subparsers.add_parser(
+        "sync-plan",
+        help="Explain safe push/pull decisions for the current branch.",
+    )
+    add_path_argument(sync_plan_command)
+    sync_plan_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    sync_plan_command.set_defaults(handler=handle_git_sync_plan)
+
+    analyze_command = git_subparsers.add_parser(
+        "analyze",
+        help="Run a bundled smart Git analysis for backend and Agent integration.",
+    )
+    add_path_argument(analyze_command)
+    analyze_command.add_argument(
+        "--include",
+        nargs="+",
+        default=[],
+        help="Analyses to include: status, doctor, map, sync-plan, commit-plan.",
+    )
+    analyze_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    analyze_command.set_defaults(handler=handle_git_analyze)
+
     quickstart_command = git_subparsers.add_parser(
         "quickstart",
         help="Show the recommended first commands for a repository.",
@@ -338,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
     status_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     status_command.set_defaults(handler=handle_executor_status)
 
-    connect_command = executor_subparsers.add_parser("connect", help="Poll the backend for read-only detection tasks.")
+    connect_command = executor_subparsers.add_parser("connect", help="Poll the backend for detection and approved tasks.")
     add_executor_config_argument(connect_command)
     connect_command.add_argument("--server-url", help="Override backend base URL.")
     connect_command.add_argument("--token", help="Override executor token.")
@@ -374,6 +415,82 @@ def build_parser() -> argparse.ArgumentParser:
     ssh_hosts_command.add_argument("--resolve", action="store_true", help="Resolve each host with ssh -G.")
     ssh_hosts_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     ssh_hosts_command.set_defaults(handler=handle_executor_ssh_hosts)
+
+    backend_command = executor_subparsers.add_parser(
+        "backend",
+        help="Run a minimal local Executor backend for MVP integration.",
+    )
+    backend_command.add_argument("--host", default="127.0.0.1", help="Backend host.")
+    backend_command.add_argument("--port", type=int, default=8780, help="Backend port.")
+    backend_command.add_argument(
+        "--storage",
+        type=Path,
+        default=default_backend_storage_path(),
+        help="JSON storage path for tasks, snapshots, and operation logs.",
+    )
+    backend_command.add_argument("--token", required=True, help="Bearer token accepted from executors.")
+    backend_command.set_defaults(handler=handle_executor_backend)
+
+    enqueue_command = executor_subparsers.add_parser(
+        "enqueue",
+        help="Create a task in the local Executor backend JSON queue.",
+    )
+    enqueue_command.add_argument(
+        "--storage",
+        type=Path,
+        default=default_backend_storage_path(),
+        help="JSON storage path used by `projectpilot executor backend`.",
+    )
+    enqueue_command.add_argument("--payload-json", help="Full task payload as a JSON object.")
+    enqueue_command.add_argument("--type", help="Task type, for example detect_environment.")
+    enqueue_command.add_argument("--executor-id", help="Optional executor assignment.")
+    enqueue_command.add_argument("--project-path", help="Local or remote project path.")
+    enqueue_command.add_argument("--ssh-host", help="SSH Host alias for remote tasks.")
+    enqueue_command.add_argument("--operation", help="Git operation for approved execution tasks.")
+    enqueue_command.add_argument("--approved", action="store_true", help="Mark execution task as approved.")
+    enqueue_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
+    enqueue_command.add_argument("--params-json", help="Task params as a JSON object.")
+    enqueue_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    enqueue_command.set_defaults(handler=handle_executor_enqueue)
+
+    run_local_command = executor_subparsers.add_parser(
+        "run-local",
+        help="Run an embedded backend and executor in one process for local demos.",
+    )
+    run_local_command.add_argument("--host", default="127.0.0.1", help="Embedded backend host.")
+    run_local_command.add_argument("--port", type=int, default=0, help="Embedded backend port. Defaults to any free port.")
+    run_local_command.add_argument("--token", default="dev-token", help="Bearer token used by the embedded executor.")
+    run_local_command.add_argument(
+        "--storage",
+        type=Path,
+        help="Persist embedded backend JSON storage. Defaults to a temporary file.",
+    )
+    run_local_command.add_argument("--executor-id", default="projectpilot-local-agent", help="Local executor id.")
+    run_local_command.add_argument(
+        "--allowed-root",
+        default=".",
+        help="Root directory this embedded executor may inspect or modify.",
+    )
+    run_local_command.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds.")
+    run_local_command.add_argument("--timeout", type=int, default=15, help="HTTP timeout in seconds.")
+    run_local_command.add_argument("--once", action="store_true", help="Process one task and exit.")
+    run_local_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    run_local_command.add_argument("--no-task", action="store_true", help="Start without queuing an initial task.")
+    run_local_command.add_argument("--payload-json", help="Full task payload as a JSON object.")
+    run_local_command.add_argument("--type", default="smart_git_analyze", help="Task type to enqueue.")
+    run_local_command.add_argument("--project-path", default=".", help="Project path for the default task.")
+    run_local_command.add_argument(
+        "--analyses",
+        nargs="+",
+        default=["map", "sync-plan", "commit-plan"],
+        help="Smart Git analyses for the default task.",
+    )
+    run_local_command.add_argument("--ssh-host", help="SSH Host alias for remote tasks.")
+    run_local_command.add_argument("--operation", help="Git operation for approved execution tasks.")
+    run_local_command.add_argument("--approved", action="store_true", help="Mark execution task as approved.")
+    run_local_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
+    run_local_command.add_argument("--params-json", help="Task params as a JSON object.")
+    run_local_command.set_defaults(handler=handle_executor_run_local)
 
     return parser
 
@@ -735,6 +852,39 @@ def handle_git_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_git_map(args: argparse.Namespace) -> int:
+    state_map = build_state_map(Path(args.path))
+
+    if args.json:
+        print(json.dumps(state_map.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_state_map(state_map.to_dict())
+    return 0
+
+
+def handle_git_sync_plan(args: argparse.Namespace) -> int:
+    sync_plan = build_sync_plan(Path(args.path))
+
+    if args.json:
+        print(json.dumps(sync_plan.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print_sync_plan(sync_plan.to_dict())
+    return 0
+
+
+def handle_git_analyze(args: argparse.Namespace) -> int:
+    analysis = analyze_repository(Path(args.path), analyses=args.include or None)
+
+    if args.json:
+        print(json.dumps(analysis, ensure_ascii=False, indent=2))
+        return 0 if analysis.get("success") else 1
+
+    print_smart_git_analysis(analysis)
+    return 0 if analysis.get("success") else 1
+
+
 def print_dry_run_operation(plan: OperationPlan, as_json: bool) -> int:
     if as_json:
         print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
@@ -892,6 +1042,145 @@ def handle_executor_ssh_hosts(args: argparse.Namespace) -> int:
     for host in hosts:
         print(host)
     return 0
+
+
+def handle_executor_backend(args: argparse.Namespace) -> int:
+    run_executor_backend(
+        host=args.host,
+        port=args.port,
+        token=args.token,
+        storage_path=args.storage,
+    )
+    return 0
+
+
+def handle_executor_enqueue(args: argparse.Namespace) -> int:
+    task = build_executor_task_payload(args)
+    created = ExecutorBackendStore(args.storage).create_task(task)
+
+    if args.json:
+        print(json.dumps({"success": True, "task": created}, ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"Task queued: {created['id']}")
+    print(f"Type: {created['type']}")
+    print(f"Storage: {args.storage.expanduser()}")
+    return 0
+
+
+def handle_executor_run_local(args: argparse.Namespace) -> int:
+    if args.storage:
+        return run_embedded_executor_stack(args, args.storage)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        return run_embedded_executor_stack(args, Path(temp_dir) / "executor-backend.json")
+
+
+def run_embedded_executor_stack(args: argparse.Namespace, storage: Path) -> int:
+    server = create_executor_backend_server(
+        host=args.host,
+        port=args.port,
+        token=args.token,
+        storage_path=storage,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    actual_host, actual_port = server.server_address[:2]
+    backend_url = f"http://{actual_host}:{actual_port}"
+    queued_task: dict[str, Any] | None = None
+
+    try:
+        if not args.no_task:
+            task = build_executor_task_payload(args)
+            queued_task = ExecutorBackendStore(storage).create_task(task)
+
+        config = build_config(
+            server_url=backend_url,
+            token=args.token,
+            executor_id=args.executor_id,
+            allowed_root=args.allowed_root,
+            interval=args.interval,
+            mode="local",
+        )
+
+        if args.once or args.json:
+            result = poll_and_run_once(config, timeout=args.timeout)
+            state = ExecutorBackendStore(storage).snapshot()
+            payload = {
+                "success": True,
+                "backend_url": backend_url,
+                "storage": str(storage.expanduser()),
+                "queued_task": queued_task,
+                "executor_result": result,
+                "state": state,
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+
+            print_embedded_executor_result(payload)
+            return 0
+
+        print(f"ProjectPilot local stack: {backend_url}")
+        print(f"Storage: {storage.expanduser()}")
+        if queued_task:
+            print(f"Queued task: {queued_task['id']} ({queued_task['type']})")
+        print("Press Ctrl+C to stop.")
+        print()
+        run_connect_loop(config, once=False, timeout=args.timeout)
+        return 0
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def print_embedded_executor_result(payload: dict[str, Any]) -> None:
+    queued_task = payload.get("queued_task") or {}
+    executor_result = payload.get("executor_result") or {}
+    task_result = executor_result.get("result") if isinstance(executor_result, dict) else None
+    task_success = isinstance(task_result, dict) and bool(task_result.get("success"))
+
+    print("ProjectPilot local stack completed.")
+    print(f"Backend: {payload.get('backend_url')}")
+    print(f"Storage: {payload.get('storage')}")
+    if queued_task:
+        print(f"Task: {queued_task.get('id')} ({queued_task.get('type')})")
+    print(f"Submitted: {'yes' if executor_result.get('submitted') else 'no'}")
+    if executor_result.get("submitted"):
+        print(f"Result: {'success' if task_success else 'failed'}")
+
+
+def build_executor_task_payload(args: argparse.Namespace) -> dict[str, Any]:
+    if args.payload_json:
+        payload = json.loads(args.payload_json)
+        if not isinstance(payload, dict):
+            raise ValueError("--payload-json must be a JSON object.")
+        return payload
+
+    if not args.type:
+        raise ValueError("--type is required when --payload-json is not provided.")
+
+    payload: dict[str, Any] = {"type": args.type}
+    if args.executor_id:
+        payload["executor_id"] = args.executor_id
+    if args.project_path:
+        payload["project_path"] = args.project_path
+    if payload["type"] == "smart_git_analyze" and getattr(args, "analyses", None):
+        payload["analyses"] = args.analyses
+    if args.ssh_host:
+        payload["ssh_host"] = args.ssh_host
+    if args.operation:
+        payload["operation"] = args.operation
+    if args.approved:
+        payload["approved"] = True
+    if args.expected_command:
+        payload["expected_command"] = args.expected_command
+    if args.params_json:
+        params = json.loads(args.params_json)
+        if not isinstance(params, dict):
+            raise ValueError("--params-json must be a JSON object.")
+        payload["params"] = params
+    return payload
 
 
 def load_or_build_executor_config(args: argparse.Namespace):
@@ -1069,6 +1358,102 @@ def print_doctor_report(report: DoctorReport) -> None:
     print()
     print("Recommended next step:")
     print(f"- {report.recommended_next_step}")
+
+
+def print_state_map(report: dict[str, Any]) -> None:
+    print(f"Repository: {report['repo_path']}")
+    print(f"Branch: {report['branch'] or '(detached HEAD)'}")
+    print(f"Upstream: {report['upstream'] or 'not configured'}")
+    print(f"State: {report['state']}")
+    print(f"Risk: {report['risk']}")
+    print()
+    print_state_map_group("Working Tree", report["working_tree"])
+    print_state_map_group("Staged", report["staged"])
+    print_state_map_group("Untracked", report["untracked"])
+    print_state_map_group("Conflicted", report["conflicted"])
+    print()
+    local_commits = report.get("local_commits") or {}
+    remote = report.get("remote") or {}
+    print("Local Commits")
+    print(f"  ahead: {local_commits.get('ahead', 0)}")
+    for commit in local_commits.get("commits", []):
+        print(f"  - {commit}")
+    if not local_commits.get("commits"):
+        print("  - None")
+    print()
+    print("Remote")
+    print(f"  upstream: {remote.get('upstream') or 'not configured'}")
+    print(f"  behind: {remote.get('behind', 0)}")
+    print(f"  diverged: {format_bool(bool(remote.get('diverged')))}")
+    print()
+    print("Next Steps:")
+    for step in report["next_steps"]:
+        print(f"- {step}")
+
+
+def print_state_map_group(title: str, items: list[dict[str, Any]]) -> None:
+    print(f"{title}: {len(items)}")
+    if not items:
+        print("  - None")
+        return
+    for item in items:
+        print(f"  - {item['status']} {item['path']}")
+
+
+def print_sync_plan(report: dict[str, Any]) -> None:
+    print("Git Sync Plan")
+    print()
+    print(f"Repository: {report['repo_path']}")
+    print(f"Branch: {report['branch'] or '(detached HEAD)'}")
+    print(f"Upstream: {report['upstream'] or 'not configured'}")
+    print(f"Risk: {report['risk']}")
+    print(f"Sync state: {report['sync_state']}")
+    print(f"Working tree: {report['working_tree_state']}")
+    print(f"Ahead/Behind: +{report['ahead']} / -{report['behind']}")
+    print(f"Can push: {format_bool(report['can_push'])}")
+    print(f"Can fast-forward pull: {format_bool(report['can_pull_ff_only'])}")
+    print()
+    print("Decision:")
+    print(f"- {report['recommended_action']}")
+    print(report["explanation"])
+    print()
+    if report["operation_plans"]:
+        print("Allowed operation plans:")
+        for plan in report["operation_plans"]:
+            print(f"- {plan['operation']}: {' '.join(plan.get('command', []))}")
+    if report["blocked_operations"]:
+        print("Blocked operations:")
+        for operation in report["blocked_operations"]:
+            print(f"- {operation['operation']}: {operation['reason']}")
+    print()
+    print("Next Steps:")
+    for step in report["next_steps"]:
+        print(f"- {step}")
+
+
+def print_smart_git_analysis(analysis: dict[str, Any]) -> None:
+    if not analysis.get("success"):
+        print(f"Smart Git analysis failed: {analysis.get('message', 'unknown error')}", file=sys.stderr)
+        return
+    print("Smart Git Analysis")
+    print()
+    print(f"Repository: {analysis['repo_path']}")
+    print(f"Branch: {analysis.get('branch') or '(detached HEAD)'}")
+    print(f"Upstream: {analysis.get('upstream') or 'not configured'}")
+    print(f"State: {analysis.get('state')}")
+    print(f"Risk: {analysis.get('risk')}")
+    print()
+    reports = analysis.get("reports", {})
+    if "map" in reports:
+        print_state_map(reports["map"])
+        print()
+    if "sync_plan" in reports:
+        print_sync_plan(reports["sync_plan"])
+        print()
+    if analysis.get("next_steps"):
+        print("Combined Next Steps:")
+        for step in analysis["next_steps"]:
+            print(f"- {step}")
 
 
 def print_plan_group(title: str, items: list[CommitPlanItem]) -> None:

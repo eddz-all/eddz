@@ -1871,7 +1871,7 @@ SSH Servers:
 Recent Tasks:
   detect_git dev-server        success
   detect_environment prod      success
-  git_pull_ff_only dev-server  waiting confirmation
+  apply_remote_git_operation   waiting confirmation
 
 [Start Executor] [Stop Executor] [Scan SSH Config] [Test All] [Open Web]
 ```
@@ -2035,6 +2035,24 @@ task.server_id 在允许范围内
 task.path 在 allowed-root 内
 ```
 
+当前 Executor 已落地的 Git 执行任务：
+
+```text
+apply_git_operation
+apply_remote_git_operation
+```
+
+执行规则：
+
+- 必须包含 `approved: true`；
+- 本地任务必须落在 `allowed-root` 内；
+- 远程任务必须使用 SSH Host 和绝对 `project_path`；
+- 不接受 raw shell 命令；
+- 后端可以传 `expected_command`，Executor 会将它与本地生成的白名单命令逐字匹配；
+- 本地执行复用智能 Git planner；
+- 远程执行使用白名单 Git operation + params 生成 SSH 命令；
+- 执行结果必须包含 stdout、stderr、exit code 和执行前后 Git 快照。
+
 ## 8. 最终数据流
 
 ### 8.1 检测全部项目
@@ -2062,7 +2080,7 @@ AI 生成总结
 ```text
 用户点击同步 dev-server
   ↓
-AI 生成 git_pull_ff_only 任务
+AI 生成 apply_remote_git_operation 任务
   ↓
 后端校验：
     working tree clean
