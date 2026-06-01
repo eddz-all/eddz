@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import urllib.error
 import urllib.request
 import base64
+import subprocess
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, TextIO
 
 from projectpilot.executor.config import ExecutorConfig
@@ -16,7 +19,12 @@ from projectpilot.executor.remote import (
     check_connection,
     detect_remote_environment,
     detect_remote_git_status,
+    normalize_interpreter,
+    normalize_script,
+    normalize_script_args,
+    normalize_script_env,
     run_remote_script,
+    sha256_text,
 )
 from projectpilot.executor.security import PathNotAllowedError, resolve_allowed_project_path, validate_remote_project_path
 from projectpilot.integration.member_b import detect_local_environment, detect_local_git_status
@@ -26,6 +34,9 @@ EXECUTOR_CAPABILITIES = [
     "detect_environment",
     "smart_git_analyze",
     "apply_git_operation",
+    "run_local_script",
+    "apply_local_script",
+    "execute_local_script",
     "check_connection",
     "detect_remote_git_status",
     "detect_remote_environment",
@@ -162,6 +173,10 @@ def execute_task(task: dict[str, Any], config: ExecutorConfig) -> dict[str, Any]
         return execute_smart_git_analyze(task, resolved_path)
     if task_type == "apply_git_operation":
         return execute_local_git_operation(task, resolved_path)
+    if task_type in {"run_local_script", "apply_local_script", "execute_local_script"}:
+        if not task.get("approved"):
+            return failure("approval_required", "Local script execution tasks require approved: true.")
+        return execute_local_script_task(task, resolved_path)
     return failure("unsupported_task", f"Unsupported task type: {task_type}")
 
 
@@ -176,6 +191,56 @@ def execute_smart_git_analyze(task: dict[str, Any], resolved_path) -> dict[str, 
     from projectpilot.integration.smart_git import analyze_repository
 
     return analyze_repository(resolved_path, analyses=analyses)
+
+
+def execute_local_script_task(task: dict[str, Any], resolved_path: Path) -> dict[str, Any]:
+    try:
+        script = normalize_script(extract_script(task))
+        script_sha256 = sha256_text(script)
+        expected_sha256 = script_expected_hash(task, extract_params(task))
+        if expected_sha256 and expected_sha256 != script_sha256:
+            return {
+                "success": False,
+                "error_type": "script_hash_mismatch",
+                "project_path": str(resolved_path),
+                "message": "Approved script hash does not match the script payload.",
+                "expected_sha256": expected_sha256,
+                "script_sha256": script_sha256,
+            }
+
+        interpreter = normalize_interpreter(str(task.get("interpreter") or "bash"))
+        args = normalize_script_args(task.get("args", []))
+        env = normalize_script_env(task.get("env", {}))
+        command = [interpreter, "-s", "--", *args]
+        result = subprocess.run(
+            command,
+            input=script,
+            text=True,
+            cwd=str(resolved_path),
+            env={**os.environ, **env},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=int(task.get("timeout") or 60),
+        )
+        success = result.returncode == 0
+        return {
+            "success": success,
+            "error_type": None if success else "local_script_failed",
+            "project_path": str(resolved_path),
+            "interpreter": interpreter,
+            "command": command,
+            "script_sha256": script_sha256,
+            "script_size": len(script.encode("utf-8")),
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.returncode,
+            "message": "Script executed successfully" if success else result.stderr.strip() or "Local script failed.",
+        }
+    except subprocess.TimeoutExpired:
+        return failure("local_script_timeout", "Local script execution timed out.")
+    except ValueError as exc:
+        return failure("invalid_task", str(exc))
 
 
 def execute_remote_task(task_type: str, task: dict[str, Any], config: ExecutorConfig) -> dict[str, Any]:

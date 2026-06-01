@@ -162,6 +162,9 @@ class ExecutorBackendStore:
         elif task_type in {"detect_environment", "detect_remote_environment"}:
             data["environment_snapshots"].append(base)
         elif task_type in {
+            "run_local_script",
+            "apply_local_script",
+            "execute_local_script",
             "apply_git_operation",
             "apply_remote_git_operation",
             "run_remote_script",
