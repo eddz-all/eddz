@@ -3,27 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/projectpilot-executor"
-TUI_DIR="$ROOT_DIR/tui/projectpilot-tui"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-CARGO_BIN="${CARGO_BIN:-$HOME/.cargo/bin/cargo}"
-
-if [[ ! -x "$CARGO_BIN" ]]; then
-  if command -v cargo >/dev/null 2>&1; then
-    CARGO_BIN="$(command -v cargo)"
-  else
-    echo "cargo was not found. Install Rust first: https://rustup.rs" >&2
-    exit 1
-  fi
-fi
 
 cd "$ROOT_DIR"
 
 echo "==> Checking Python package"
 "$PYTHON_BIN" -m compileall projectpilot >/dev/null
-
-echo "==> Building Rust TUI"
-"$CARGO_BIN" build --release --manifest-path "$TUI_DIR/Cargo.toml"
 
 echo "==> Creating $DIST_DIR"
 rm -rf "$DIST_DIR"
@@ -31,7 +17,6 @@ mkdir -p "$DIST_DIR/bin" "$DIST_DIR/python" "$DIST_DIR/examples"
 
 cp -R "$ROOT_DIR/projectpilot" "$DIST_DIR/python/projectpilot"
 cp "$ROOT_DIR/pyproject.toml" "$DIST_DIR/pyproject.toml"
-cp "$TUI_DIR/target/release/projectpilot-tui" "$DIST_DIR/bin/projectpilot-tui"
 
 cat > "$DIST_DIR/bin/projectpilot-executor" <<'SH'
 #!/usr/bin/env bash
@@ -51,7 +36,7 @@ export PYTHONPATH="$APP_HOME/python${PYTHONPATH:+:$PYTHONPATH}"
 exec "$PYTHON_BIN" -m projectpilot "$@"
 SH
 
-chmod +x "$DIST_DIR/bin/projectpilot-executor" "$DIST_DIR/bin/projectpilot" "$DIST_DIR/bin/projectpilot-tui"
+chmod +x "$DIST_DIR/bin/projectpilot-executor" "$DIST_DIR/bin/projectpilot"
 
 cat > "$DIST_DIR/examples/remote-script-task.json" <<'JSON'
 {
@@ -82,8 +67,26 @@ This directory is a self-contained ProjectPilot Executor bundle.
 ./bin/projectpilot-executor --version
 ./bin/projectpilot-executor setup
 ./bin/projectpilot-executor connect --once --json
+./bin/projectpilot-executor publish --print-only --json
 ./bin/projectpilot-executor ssh-hosts --json
-./bin/projectpilot-tui --help
+```
+
+On the server-b Ubuntu VM, `./bin/projectpilot` starts the built-in executor profile directly:
+
+```bash
+./bin/projectpilot
+```
+
+Built-in profile:
+
+```text
+server_url: https://printable-played-chances-response.trycloudflare.com
+executor_id: server-b
+allowed_root: /home/hzy
+project_path: /home/hzy/project/web
+token: dev-token
+interval: 3
+mode: central
 ```
 
 ## Python Executor
@@ -100,20 +103,32 @@ The Python executor polls the backend, validates approved tasks, runs local or S
   --json
 ```
 
-## Rust TUI Approval Client
+## Task Publisher
 
-The Rust TUI polls script tasks, displays the script, lets the user edit/reject/approve, then executes the script on the current server by default:
+Queue a smart Git task against a compatible backend task endpoint:
 
 ```bash
-./bin/projectpilot-tui \
+./bin/projectpilot-executor publish \
   --server-url http://127.0.0.1:8780 \
   --token dev-token \
-  --executor-id eddz-tui \
-  --execution-mode local \
-  --once
+  --executor-id server-b \
+  --project-path /home/hzy/project/web \
+  --type smart_git_analyze \
+  --analyses map sync-plan commit-plan \
+  --json
 ```
 
-Use `--execution-mode ssh` only for remote debugging from another machine.
+Trigger a project/server detection flow on the backend:
+
+```bash
+./bin/projectpilot-executor publish \
+  --server-url http://127.0.0.1:8780 \
+  --token dev-token \
+  --mode project-detect \
+  --project-id 1 \
+  --server-id 1 \
+  --json
+```
 
 ## Remote Script Task Shape
 
@@ -127,8 +142,8 @@ The task must include an SSH host, absolute remote project path, script body, an
 
 ## Notes
 
-- Local execution runs on the same server where `projectpilot-tui` is launched.
-- SSH debug mode uses the machine's normal `ssh`, `~/.ssh/config`, ssh-agent/keychain, and terminal password prompts when password auth is selected.
+- Local execution runs on the same server where `projectpilot-executor` is launched.
+- SSH execution uses the machine's normal `ssh`, `~/.ssh/config`, ssh-agent/keychain, and terminal password prompts when password auth is selected.
 - The executor does not hold private keys for AI.
 - Script execution uses SSH stdin, for example:
 
@@ -139,6 +154,5 @@ MD
 
 echo "==> Verifying bundle commands"
 "$DIST_DIR/bin/projectpilot-executor" --version
-"$DIST_DIR/bin/projectpilot-tui" --help
 
 echo "==> Executor bundle ready: $DIST_DIR"

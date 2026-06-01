@@ -19,6 +19,16 @@ from projectpilot.executor.backend import (
 )
 from projectpilot.executor.client import poll_and_run_once, run_connect_loop
 from projectpilot.executor.config import build_config, default_config_path, load_config, save_config
+from projectpilot.executor.publisher import (
+    PublishTarget,
+    build_project_detect_path,
+    build_task_payload,
+    parse_json_object,
+    publish_json,
+    read_script,
+    render_payload_preview,
+    run_publish_console,
+)
 from projectpilot.executor.remote import list_ssh_hosts, resolve_ssh_host
 from projectpilot.git.analyzer import analyze_status
 from projectpilot.git.audit import read_audit_entries
@@ -62,10 +72,24 @@ from projectpilot.models.doctor import DoctorReport
 from projectpilot.models.git_status import GitStatus
 from projectpilot.models.operation_plan import OperationPlan, OperationResult
 
+SERVER_B_EXECUTOR_PROFILE = {
+    "server_url": "https://printable-played-chances-response.trycloudflare.com",
+    "token": "dev-token",
+    "executor_id": "server-b",
+    "allowed_root": "/home/hzy",
+    "project_path": "/home/hzy/project/web",
+    "interval": 3.0,
+    "mode": "central",
+}
+
 
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if not raw_args and should_start_server_b_profile():
+        return start_server_b_executor_profile()
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
 
     if getattr(args, "version", False):
         print(f"projectpilot {__version__}")
@@ -83,6 +107,31 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+
+def should_start_server_b_profile() -> bool:
+    return Path(str(SERVER_B_EXECUTOR_PROFILE["allowed_root"])).expanduser().exists()
+
+
+def start_server_b_executor_profile() -> int:
+    config = build_config(
+        server_url=str(SERVER_B_EXECUTOR_PROFILE["server_url"]),
+        token=str(SERVER_B_EXECUTOR_PROFILE["token"]),
+        executor_id=str(SERVER_B_EXECUTOR_PROFILE["executor_id"]),
+        allowed_root=str(SERVER_B_EXECUTOR_PROFILE["allowed_root"]),
+        interval=float(SERVER_B_EXECUTOR_PROFILE["interval"]),
+        mode=str(SERVER_B_EXECUTOR_PROFILE["mode"]),
+    )
+    project_path = Path(str(SERVER_B_EXECUTOR_PROFILE["project_path"]))
+    print("ProjectPilot server-b executor profile")
+    print(f"Backend: {config.server_url}")
+    print(f"Executor: {config.executor_id}")
+    print(f"Allowed root: {config.allowed_root}")
+    print(f"Project path: {project_path}")
+    print(f"Project path exists: {'yes' if project_path.exists() else 'no'}")
+    print()
+    run_connect_loop(config)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -491,6 +540,46 @@ def build_parser() -> argparse.ArgumentParser:
     run_local_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
     run_local_command.add_argument("--params-json", help="Task params as a JSON object.")
     run_local_command.set_defaults(handler=handle_executor_run_local)
+
+    publish_command = executor_subparsers.add_parser(
+        "publish",
+        help="Open a task publisher console or publish an executor task.",
+    )
+    add_executor_config_argument(publish_command)
+    publish_command.add_argument("--server-url", help="Backend base URL.")
+    publish_command.add_argument("--token", help="Executor token for backend task APIs.")
+    publish_command.add_argument(
+        "--mode",
+        choices=["direct-task", "project-detect", "custom"],
+        default="direct-task",
+        help="Publishing mode. direct-task posts to /tasks; project-detect triggers a bound project/server detect endpoint.",
+    )
+    publish_command.add_argument("--interactive", action="store_true", help="Open the interactive publisher console.")
+    publish_command.add_argument("--print-only", action="store_true", help="Only print the request payload; do not POST.")
+    publish_command.add_argument("--endpoint", help="Custom POST path, for example /executor/tasks.")
+    publish_command.add_argument("--payload-json", help="Full request payload as a JSON object.")
+    publish_command.add_argument("--project-id", type=int, help="Project id for project-detect mode.")
+    publish_command.add_argument("--server-id", type=int, help="Server id for project-detect mode.")
+    publish_command.add_argument("--type", default="smart_git_analyze", help="Executor task type.")
+    publish_command.add_argument("--executor-id", help="Target executor id.")
+    publish_command.add_argument("--project-path", help="Target project path.")
+    publish_command.add_argument(
+        "--analyses",
+        nargs="+",
+        default=["map", "sync-plan", "commit-plan"],
+        help="Smart Git analyses for smart_git_analyze tasks.",
+    )
+    publish_command.add_argument("--ssh-host", help="SSH Host alias for remote tasks.")
+    publish_command.add_argument("--operation", help="Git operation for approved Git tasks.")
+    publish_command.add_argument("--approved", action="store_true", help="Mark execution task as approved.")
+    publish_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
+    publish_command.add_argument("--params-json", help="Task params as a JSON object.")
+    publish_command.add_argument("--script", help="Script body for script tasks.")
+    publish_command.add_argument("--script-file", type=Path, help="Read script body from this file.")
+    publish_command.add_argument("--interpreter", help="Script interpreter, for example bash.")
+    publish_command.add_argument("--timeout", type=int, default=15, help="HTTP timeout in seconds.")
+    publish_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    publish_command.set_defaults(handler=handle_executor_publish)
 
     return parser
 
@@ -1148,6 +1237,118 @@ def print_embedded_executor_result(payload: dict[str, Any]) -> None:
     print(f"Submitted: {'yes' if executor_result.get('submitted') else 'no'}")
     if executor_result.get("submitted"):
         print(f"Result: {'success' if task_success else 'failed'}")
+
+
+def handle_executor_publish(args: argparse.Namespace) -> int:
+    defaults = load_publisher_defaults(args)
+    server_url = args.server_url or defaults.get("server_url") or ""
+    token = args.token if args.token is not None else str(defaults.get("token") or "")
+
+    if args.interactive:
+        if not server_url and not args.print_only:
+            server_url = input("Backend server URL: ").strip()
+        if token == "" and not args.print_only:
+            token = getpass("Executor token (blank if not required): ")
+        selection = run_publish_console(
+            {
+                "executor_id": args.executor_id or defaults.get("executor_id"),
+                "project_path": args.project_path or defaults.get("project_path"),
+            }
+        )
+        path = selection["path"]
+        payload = selection["payload"]
+        print_only = args.print_only or bool(selection.get("print_only"))
+    else:
+        path, payload = build_publish_request_from_args(args, defaults)
+        print_only = args.print_only
+
+    if args.json or print_only:
+        preview = {"path": path, "payload": payload}
+        if print_only:
+            preview["success"] = True
+            preview["mode"] = "print_only"
+            print(json.dumps(preview, ensure_ascii=False, indent=2))
+            return 0
+
+    if not server_url:
+        raise ValueError("--server-url is required unless --print-only is used.")
+
+    response = publish_json(
+        PublishTarget(server_url=server_url, token=token, timeout=args.timeout),
+        path=path,
+        payload=payload,
+    )
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "success": True,
+                    "server_url": server_url,
+                    "path": path,
+                    "payload": payload,
+                    "response": response,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    print("Task publish request sent.")
+    print(f"Backend: {server_url}")
+    print(f"Path: {path}")
+    print()
+    print("Payload:")
+    print(render_payload_preview(path, payload))
+    print()
+    print("Response:")
+    print(json.dumps(response, ensure_ascii=False, indent=2))
+    return 0
+
+
+def load_publisher_defaults(args: argparse.Namespace) -> dict[str, Any]:
+    config_path = args.config or default_config_path()
+    if not config_path.expanduser().exists():
+        return {}
+    config = load_config(config_path)
+    return {
+        "server_url": config.server_url,
+        "token": config.token,
+        "executor_id": config.executor_id,
+        "project_path": str(config.allowed_root),
+    }
+
+
+def build_publish_request_from_args(args: argparse.Namespace, defaults: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    if args.mode == "project-detect":
+        if args.project_id is None or args.server_id is None:
+            raise ValueError("--project-id and --server-id are required for project-detect mode.")
+        return build_project_detect_path(args.project_id, args.server_id), {}
+
+    path = args.endpoint or "/tasks"
+    if args.mode == "custom" and not args.endpoint:
+        raise ValueError("--endpoint is required for custom mode.")
+
+    payload = parse_json_object(args.payload_json, label="--payload-json")
+    if payload is not None:
+        return path, payload
+
+    params = parse_json_object(args.params_json, label="--params-json")
+    script = read_script(args.script, args.script_file)
+    return path, build_task_payload(
+        task_type=args.type,
+        executor_id=args.executor_id or defaults.get("executor_id"),
+        project_path=args.project_path,
+        analyses=args.analyses,
+        ssh_host=args.ssh_host,
+        operation=args.operation,
+        approved=args.approved,
+        expected_command=args.expected_command,
+        params=params,
+        script=script,
+        interpreter=args.interpreter,
+    )
 
 
 def build_executor_task_payload(args: argparse.Namespace) -> dict[str, Any]:

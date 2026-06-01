@@ -209,6 +209,24 @@ For backend development, process one task and exit:
 projectpilot executor connect --once --json
 ```
 
+On the server-b Ubuntu VM, the teammate backend profile is built in. After installing the package, this starts the executor directly:
+
+```bash
+projectpilot
+```
+
+The built-in profile uses:
+
+```text
+server_url: https://printable-played-chances-response.trycloudflare.com
+executor_id: server-b
+allowed_root: /home/hzy
+project_path: /home/hzy/project/web
+token: dev-token
+interval: 3
+mode: central
+```
+
 Run a complete local Agent stack in one command. This starts an embedded backend, queues a smart Git task, runs the executor once, uploads the result, and prints the final backend state:
 
 ```bash
@@ -301,120 +319,48 @@ Example approved task:
 }
 ```
 
-## Rust TUI Approval Client
+## Task Publisher Console
 
-The Rust TUI is a server-side approval and execution client for script tasks. The reviewer SSHs into the target server, starts the TUI there, reviews or edits the script, then approves local execution on that same server.
-
-Build and run after installing Rust:
+Use the task publisher when a backend operator wants to queue executor work from the terminal:
 
 ```bash
-cd tui/projectpilot-tui
-cargo run -- \
-  --server-url http://127.0.0.1:8780 \
+projectpilot executor publish \
+  --server-url https://printable-played-chances-response.trycloudflare.com \
   --token dev-token \
-  --executor-id eddz-tui \
-  --execution-mode local \
-  --once
+  --executor-id server-b \
+  --project-path /home/hzy/project/web \
+  --type smart_git_analyze \
+  --analyses map sync-plan commit-plan \
+  --json
 ```
 
-Environment variables are also supported:
+For the teammate backend's existing project/server binding flow, trigger detection tasks with:
 
 ```bash
-export PROJECTPILOT_SERVER_URL=http://127.0.0.1:8780
-export PROJECTPILOT_EXECUTOR_TOKEN=dev-token
-export PROJECTPILOT_EXECUTOR_ID=eddz-tui
-cd tui/projectpilot-tui
-cargo run -- --once
-```
-
-The TUI currently handles these backend task types:
-
-```text
-run_remote_script
-apply_remote_script
-execute_remote_script
-run_script
-apply_script
-execute_script
-```
-
-For each task, it displays:
-
-- task id and type;
-- execution mode;
-- SSH host, only when `--execution-mode ssh` is used;
-- remote project path;
-- interpreter;
-- script SHA-256;
-- full shell script with line numbers.
-
-You can choose:
-
-```text
-a  approve and execute locally
-e  edit script
-r  reject and upload rejection result
-q  quit without uploading a result
-```
-
-In the default local mode, the TUI executes scripts on the current server with:
-
-```text
-cd <project_path> && bash -s -- < script
-```
-
-SSH execution is still available for debugging from another machine:
-
-```bash
-projectpilot-tui ... --execution-mode ssh
-```
-
-In SSH mode, `a` uses key/agent auth and `p` allows terminal password auth.
-
-If you edit the script, the uploaded result includes both the original script hash and final script hash.
-
-To build a customer-facing Linux arm64 package that does not require Rust or Python on Ubuntu:
-
-```bash
-./script/package_agent_linux_arm64.sh
-```
-
-This creates:
-
-```text
-dist/projectpilot-agent-linux-arm64.tar.gz
-```
-
-## Fake Shell Backend
-
-For local testing without the real backend, run:
-
-```bash
-./script/fake_shell_backend.py --port 8790 --token dev-token
-```
-
-Open:
-
-```text
-http://127.0.0.1:8790/
-```
-
-Then start the TUI against it:
-
-```bash
-./dist/projectpilot-executor/bin/projectpilot-tui \
-  --server-url http://127.0.0.1:8790 \
+projectpilot executor publish \
+  --server-url https://printable-played-chances-response.trycloudflare.com \
   --token dev-token \
-  --executor-id local-demo \
-  --execution-mode local
+  --mode project-detect \
+  --project-id 1 \
+  --server-id 1 \
+  --json
 ```
 
-The fake backend also accepts JSON shell tasks:
+To preview the request without sending it:
 
 ```bash
-curl -X POST http://127.0.0.1:8790/send-shell \
-  -H 'Content-Type: application/json' \
-  --data '{"project_path":"/tmp","script":"echo hello\npwd\n"}'
+projectpilot executor publish \
+  --mode project-detect \
+  --project-id 1 \
+  --server-id 1 \
+  --print-only \
+  --json
+```
+
+For a guided terminal menu, run:
+
+```bash
+projectpilot executor publish --interactive
 ```
 
 ## Executor Bundle
@@ -431,7 +377,6 @@ The output is:
 dist/projectpilot-executor/
   bin/projectpilot-executor
   bin/projectpilot
-  bin/projectpilot-tui
   python/projectpilot/
   examples/remote-script-task.json
   README_EXECUTOR.md
@@ -442,7 +387,6 @@ Run it without installing the Python package:
 ```bash
 dist/projectpilot-executor/bin/projectpilot-executor --version
 dist/projectpilot-executor/bin/projectpilot-executor connect --once --json
-dist/projectpilot-executor/bin/projectpilot-tui --help
 ```
 
 Example approved remote script task:

@@ -869,8 +869,7 @@ ProjectPilot helps developers understand Git state, plan safe operations, and ma
 - 远程环境检测；
 - SSH host 列表；
 - 本地参考后端；
-- macOS Executor App 初版；
-- Rust TUI 审批脚本初版。
+- macOS Executor App 初版。
 
 验收：
 
@@ -974,7 +973,6 @@ ProjectPilot helps developers understand Git state, plan safe operations, and ma
 - 远程受控 Git 操作；
 - 远程脚本审批执行；
 - macOS Executor App；
-- Rust TUI；
 - 本地参考后端。
 
 下一步最推荐做：
@@ -1100,4 +1098,3 @@ Executor 只执行经过批准、可审计、可解释的计划；
 - 对小团队，它是协作规范和操作审计中心；
 - 对实验室和多服务器项目，它是项目状态矩阵；
 - 对 AI 开发工具方向，它提供了一个清晰的原则：AI 负责计划，Executor 负责受控执行。
-

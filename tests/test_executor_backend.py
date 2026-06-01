@@ -233,6 +233,70 @@ class ExecutorBackendTests(unittest.TestCase):
             self.assertEqual(len(state["smart_git_analyses"]), 1)
             self.assertIn("map", state["smart_git_analyses"][0]["result"]["reports"])
 
+    def test_publish_cli_queues_smart_git_task_to_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = Path(temp_dir) / "backend.json"
+            server = start_backend(storage, token="secret")
+            output = io.StringIO()
+            try:
+                with redirect_stdout(output):
+                    exit_code = cli_main(
+                        [
+                            "executor",
+                            "publish",
+                            "--server-url",
+                            f"http://127.0.0.1:{server.server_port}",
+                            "--token",
+                            "secret",
+                            "--executor-id",
+                            "server-b",
+                            "--project-path",
+                            "/home/hzy/project/web",
+                            "--type",
+                            "smart_git_analyze",
+                            "--analyses",
+                            "map",
+                            "sync-plan",
+                            "--json",
+                        ]
+                    )
+            finally:
+                stop_server(server)
+
+            data = json.loads(output.getvalue())
+            stored = json.loads(storage.read_text(encoding="utf-8"))
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(data["success"])
+            self.assertEqual(stored["tasks"][0]["type"], "smart_git_analyze")
+            self.assertEqual(stored["tasks"][0]["executor_id"], "server-b")
+            self.assertEqual(stored["tasks"][0]["project_path"], "/home/hzy/project/web")
+            self.assertEqual(stored["tasks"][0]["analyses"], ["map", "sync-plan"])
+
+    def test_publish_cli_prints_project_detect_request_without_posting(self) -> None:
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            exit_code = cli_main(
+                [
+                    "executor",
+                    "publish",
+                    "--mode",
+                    "project-detect",
+                    "--project-id",
+                    "7",
+                    "--server-id",
+                    "9",
+                    "--print-only",
+                    "--json",
+                ]
+            )
+
+        data = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["path"], "/projects/7/servers/9/detect")
+        self.assertEqual(data["payload"], {})
+
 
 def start_backend(storage: Path, token: str):
     server = create_executor_backend_server(host="127.0.0.1", port=0, token=token, storage_path=storage)
