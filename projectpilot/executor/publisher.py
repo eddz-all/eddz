@@ -5,8 +5,14 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from getpass import getuser
+import hashlib
 from pathlib import Path
 from typing import Any, TextIO
+import uuid
+
+from projectpilot.executor.security import EXECUTION_TASK_TYPES, SCRIPT_TASK_TYPES
 
 
 DEFAULT_SMART_GIT_ANALYSES = ["map", "sync-plan", "commit-plan"]
@@ -32,6 +38,9 @@ def build_task_payload(
     params: dict[str, Any] | None = None,
     script: str | None = None,
     interpreter: str | None = None,
+    approved_by: str | None = None,
+    approval_id: str | None = None,
+    approval_expires_at: str | None = None,
 ) -> dict[str, Any]:
     task_type = task_type.strip()
     if not task_type:
@@ -50,15 +59,41 @@ def build_task_payload(
         payload["operation"] = operation
     if approved:
         payload["approved"] = True
+        if task_type in EXECUTION_TASK_TYPES:
+            payload.update(
+                build_approval_metadata(
+                    approved_by=approved_by,
+                    approval_id=approval_id,
+                    approval_expires_at=approval_expires_at,
+                )
+            )
     if expected_command:
         payload["expected_command"] = expected_command
     if params:
         payload["params"] = params
     if script is not None:
         payload["script"] = script
+        if approved and task_type in SCRIPT_TASK_TYPES:
+            payload["script_sha256"] = hashlib.sha256(script.encode("utf-8")).hexdigest()
     if interpreter:
         payload["interpreter"] = interpreter
     return payload
+
+
+def build_approval_metadata(
+    *,
+    approved_by: str | None = None,
+    approval_id: str | None = None,
+    approval_expires_at: str | None = None,
+) -> dict[str, str]:
+    now = datetime.now(timezone.utc)
+    expires_at = approval_expires_at or (now + timedelta(hours=1)).isoformat()
+    return {
+        "approval_id": approval_id or f"approval_{uuid.uuid4().hex}",
+        "approved_by": approved_by or getuser(),
+        "approved_at": now.isoformat(),
+        "approval_expires_at": expires_at,
+    }
 
 
 def build_project_detect_path(project_id: int, server_id: int) -> str:

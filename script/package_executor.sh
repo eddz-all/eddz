@@ -43,10 +43,15 @@ cat > "$DIST_DIR/examples/remote-script-task.json" <<'JSON'
   "id": "task_script_1",
   "type": "run_remote_script",
   "approved": true,
+  "approval_id": "approval-example-remote-script",
+  "approved_by": "projectpilot-example",
+  "approved_at": "2026-01-01T00:00:00+00:00",
+  "approval_expires_at": "2099-01-01T00:00:00+00:00",
   "ssh_host": "dev-server",
   "project_path": "/srv/app",
   "interpreter": "bash",
   "script": "set -euo pipefail\npwd\nhostname\n",
+  "script_sha256": "fc63fc56acdde049c924411531cd3461cb85480bc21f40ac82e73853a52f771b",
   "params": {
     "env": {
       "APP_ENV": "production"
@@ -61,11 +66,15 @@ cat > "$DIST_DIR/examples/local-script-task.json" <<'JSON'
   "id": "task_script_1",
   "type": "run_local_script",
   "approved": true,
+  "approval_id": "approval-example-local-script",
+  "approved_by": "projectpilot-example",
+  "approved_at": "2026-01-01T00:00:00+00:00",
+  "approval_expires_at": "2099-01-01T00:00:00+00:00",
   "executor_id": "server-b",
   "project_path": "/home/hzy/project/web",
   "interpreter": "bash",
   "script": "set -euo pipefail\npwd\ngit status --short\n",
-  "script_sha256": "expected_sha256_hex"
+  "script_sha256": "b777eec52dea197131b2da1976e1acbab31946db917555bdd83fedb001a8a7bb"
 }
 JSON
 
@@ -158,7 +167,7 @@ For the server-b VM flow, the backend can queue a local approved script task:
 examples/local-script-task.json
 ```
 
-The executor only runs it if `project_path` is inside `allowed_root`.
+The executor only runs it if `project_path` is inside `allowed_root`, approval metadata is present, approval is not expired, and `script_sha256` matches the script body.
 
 ## Remote Script Task Shape
 
@@ -168,7 +177,7 @@ See:
 examples/remote-script-task.json
 ```
 
-The task must include an SSH host, absolute remote project path, script body, and `approved: true`.
+The task must include an SSH host, absolute remote project path, script body, `approved: true`, approval metadata, and a matching `script_sha256`.
 
 ## Notes
 

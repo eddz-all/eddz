@@ -9,6 +9,7 @@ Later, each table can become one Python file here, for example:
 """
 
 from models.environment_snapshot import EnvironmentSnapshot
+from models.executor_task import ExecutorTask
 from models.git_status import GitStatus
 from models.operation_log import OperationLog
 from models.project import Project

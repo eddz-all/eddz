@@ -27,6 +27,9 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "ProjectPilot Team",
+    "homepage": "https://github.com/eddz-all/eddz",
+    "createUpdaterArtifacts": false,
     "targets": "all",
     "macOS": {
       "signingIdentity": "-"

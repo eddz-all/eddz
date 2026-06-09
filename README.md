@@ -308,11 +308,11 @@ run_remote_script
 run_local_script
 ```
 
-Local task paths must be inside `allowed-root`. `smart_git_analyze` is a read-only Agent task for scheme-A deployments where each machine runs its own ProjectPilot Agent and uploads smart Git JSON to the backend. Remote SSH tasks require `ssh_host` and, when they inspect or modify a project, an absolute remote `project_path`. Git and script execution tasks must include `approved: true`; optional `expected_command` lets the backend require the executor-generated Git command to match the approved plan exactly. Remote script tasks can include `script_sha256` so the executor verifies the approved script content before running it.
+Local task paths must be inside `allowed-root`. `smart_git_analyze` is a read-only Agent task for scheme-A deployments where each machine runs its own ProjectPilot Agent and uploads smart Git JSON to the backend. Remote SSH tasks require `ssh_host` and, when they inspect or modify a project, an absolute remote `project_path`. Git and script execution tasks must include `approved: true`, `approval_id`, `approved_by`, `approved_at`, and `approval_expires_at`. Git execution tasks also require `expected_command` so the executor-generated Git command must match the approved plan exactly. Script tasks require `script_sha256` so the executor verifies approved script content before running it. Production backends should issue short-lived approval windows.
 
 Local Git execution uses the same intelligent Git planner as the CLI. Remote Git execution never accepts raw shell commands; it maps structured `operation` and `params` fields to whitelisted Git commands, runs them through SSH, and returns before/after snapshots, stdout, stderr, and exit code.
 
-Local script execution is for backend-approved work on the same machine as the executor, such as the server-b VM. The executor resolves `project_path` under `allowed-root`, verifies an optional `script_sha256`, runs the script through `bash -s --` or `sh -s --`, and uploads stdout, stderr, exit code, script hash, and duration. Remote script execution works the same way, but sends the script over SSH stdin to the target host.
+Local script execution is for backend-approved work on the same machine as the executor, such as the server-b VM. The executor resolves `project_path` under `allowed-root`, requires a matching `script_sha256`, runs the script through `bash -s --` or `sh -s --`, and uploads stdout, stderr, exit code, script hash, and duration. Remote script execution works the same way, but sends the script over SSH stdin to the target host.
 
 Example approved task:
 
@@ -321,6 +321,10 @@ Example approved task:
   "id": "task_42",
   "type": "apply_remote_git_operation",
   "approved": true,
+  "approval_id": "approval-42",
+  "approved_by": "operator@example.com",
+  "approved_at": "2026-01-01T00:00:00+00:00",
+  "approval_expires_at": "2099-01-01T00:00:00+00:00",
   "ssh_host": "dev-server",
   "project_path": "/srv/app",
   "operation": "pull",
@@ -406,11 +410,15 @@ Example approved remote script task:
   "id": "task_script_1",
   "type": "run_remote_script",
   "approved": true,
+  "approval_id": "approval-remote-script-1",
+  "approved_by": "operator@example.com",
+  "approved_at": "2026-01-01T00:00:00+00:00",
+  "approval_expires_at": "2099-01-01T00:00:00+00:00",
   "ssh_host": "dev-server",
   "project_path": "/srv/app",
   "interpreter": "bash",
   "script": "set -euo pipefail\n./deploy.sh\n",
-  "script_sha256": "expected_sha256_hex",
+  "script_sha256": "bb38da8af76e06824ba4119c86ac6d435a184217ddfb1112a530064dd445fbfb",
   "params": {
     "env": {
       "APP_ENV": "production"
@@ -427,10 +435,14 @@ Example approved local script task for the server-b executor:
   "id": "task_script_1",
   "type": "run_local_script",
   "approved": true,
+  "approval_id": "approval-local-script-1",
+  "approved_by": "operator@example.com",
+  "approved_at": "2026-01-01T00:00:00+00:00",
+  "approval_expires_at": "2099-01-01T00:00:00+00:00",
   "executor_id": "server-b",
   "project_path": "/home/hzy/project/web",
   "interpreter": "bash",
   "script": "set -euo pipefail\npwd\ngit status --short\n",
-  "script_sha256": "expected_sha256_hex"
+  "script_sha256": "b777eec52dea197131b2da1976e1acbab31946db917555bdd83fedb001a8a7bb"
 }
 ```

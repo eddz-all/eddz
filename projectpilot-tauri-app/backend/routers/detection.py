@@ -9,6 +9,7 @@ from services.detector_service import (
     detect_remote_environment,
     detect_remote_git_status,
 )
+from services.executor_task_service import create_executor_task, format_executor_task
 from services.log_service import create_operation_log
 
 
@@ -45,6 +46,25 @@ def _format_environment_snapshot(snapshot: EnvironmentSnapshot | None):
         "disk_usage": snapshot.disk_usage,
         "raw_data": snapshot.raw_data,
         "created_at": snapshot.created_at,
+    }
+
+
+def _executor_id_for_server(server: Server):
+    if server.connection_mode == "local":
+        return "local-backend"
+    if server.connection_mode == "ssh":
+        return "ssh-backend"
+    return "executor-queue"
+
+
+def _task_payload(server: Server, project_path: str):
+    return {
+        "server_name": server.name,
+        "host": server.host,
+        "port": server.port,
+        "username": server.username,
+        "project_path": project_path,
+        "connection_mode": server.connection_mode,
     }
 
 
@@ -110,6 +130,8 @@ def detect_project_server(
 
     git_status = None
     environment_snapshot = None
+    git_result = None
+    env_result = None
     errors = []
 
     if request.detect_git:
@@ -168,6 +190,38 @@ def detect_project_server(
         db.refresh(environment_snapshot)
 
     status = "completed" if not errors else "failed"
+    tasks = []
+    if git_result is not None:
+        git_task = create_executor_task(
+            db=db,
+            project_id=project.id,
+            server_id=server.id,
+            task_type="detect_git",
+            status="completed" if git_result.get("success") else "failed",
+            executor_id=_executor_id_for_server(server),
+            payload=_task_payload(server, binding.project_path),
+            result=_format_git_status(git_status) if git_status is not None else git_result,
+            error_type=git_result.get("error_type"),
+            message=git_result.get("message") or f"Git detection finished for {project.name}",
+        )
+        tasks.append(format_executor_task(git_task))
+    if env_result is not None:
+        environment_task = create_executor_task(
+            db=db,
+            project_id=project.id,
+            server_id=server.id,
+            task_type="detect_environment",
+            status="completed" if env_result.get("success") else "failed",
+            executor_id=_executor_id_for_server(server),
+            payload=_task_payload(server, binding.project_path),
+            result=_format_environment_snapshot(environment_snapshot)
+            if environment_snapshot is not None
+            else env_result,
+            error_type=env_result.get("error_type"),
+            message=env_result.get("message") or f"Environment detection finished for {server.name}",
+        )
+        tasks.append(format_executor_task(environment_task))
+
     create_operation_log(
         db=db,
         project_id=project.id,
@@ -190,6 +244,7 @@ def detect_project_server(
         "error_message": "; ".join(errors) if errors else None,
         "git_status": _format_git_status(git_status),
         "environment_snapshot": _format_environment_snapshot(environment_snapshot),
+        "tasks": tasks,
     }
 
 

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Project, ProjectServerMapping, Server
 from schemas import ExecuteConfigPlanRequest
+from services.executor_task_service import create_executor_task, format_executor_task
 from services.execution_service import simulate_config_plan_execution
 from services.log_service import create_operation_log
 
@@ -72,6 +73,27 @@ def execute_config_plan(
         summary=f"Executed config plan for {project.name} on {server.name}",
         detail=execution["message"],
     )
+    task = create_executor_task(
+        db=db,
+        project_id=project.id,
+        server_id=server.id,
+        task_type="execute_config_plan",
+        status=execution["status"],
+        approval_status="approved",
+        executor_id=f"{server.connection_mode}-backend",
+        payload={
+            "project_path": binding.project_path,
+            "connection_mode": server.connection_mode,
+            "steps": [step.model_dump() for step in request.steps],
+        },
+        result={
+            "success": execution["status"] == "completed",
+            "message": execution["message"],
+            "safety_report": execution["safety_report"],
+            "results": execution["results"],
+        },
+        message=execution["message"],
+    )
 
     return {
         "project_id": project.id,
@@ -84,4 +106,5 @@ def execute_config_plan(
         "message": execution["message"],
         "safety_report": execution["safety_report"],
         "results": execution["results"],
+        "tasks": [format_executor_task(task)],
     }

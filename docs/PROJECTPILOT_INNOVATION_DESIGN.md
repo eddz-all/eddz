@@ -679,6 +679,10 @@ Executor 只处理结构化任务。
   "id": "task_03",
   "type": "apply_remote_git_operation",
   "approved": true,
+  "approval_id": "approval-03",
+  "approved_by": "operator@example.com",
+  "approved_at": "2026-01-01T00:00:00+00:00",
+  "approval_expires_at": "2099-01-01T00:00:00+00:00",
   "project_id": "project_01",
   "ssh_host": "dev-server",
   "project_path": "/srv/projectpilot",
@@ -693,9 +697,9 @@ Executor 只处理结构化任务。
 - 远程项目路径必须是绝对路径；
 - 远程路径必须匹配 allowed paths；
 - Git 操作必须来自白名单；
-- 写操作必须 `approved: true`；
-- 后端可以传 `expected_command`，Executor 必须逐字匹配；
-- 远程脚本必须有审批和 sha256 校验；
+- 写操作必须 `approved: true` 且带 `approval_id`、`approved_by`、`approved_at`、`approval_expires_at`；
+- Git 写操作必须传 `expected_command`，Executor 必须逐字匹配；
+- 脚本任务必须有审批和 sha256 校验；
 - AI 不能把自由 shell 文本直接交给 Executor。
 
 ## 10. AI Planner 设计

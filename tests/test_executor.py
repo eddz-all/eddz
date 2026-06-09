@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -163,7 +164,7 @@ class ExecutorTests(unittest.TestCase):
                     "id": "task_1",
                     "type": "apply_git_operation",
                     "project_path": str(repo),
-                    "approved": True,
+                    **approval_fields(),
                     "operation": "add",
                     "expected_command": ["git", "add", "--", "projectpilot/feature.py"],
                 },
@@ -191,7 +192,7 @@ class ExecutorTests(unittest.TestCase):
                     "id": "task_1",
                     "type": "apply_git_operation",
                     "project_path": str(repo),
-                    "approved": True,
+                    **approval_fields(),
                     "operation": "add",
                     "expected_command": ["git", "add", "--", "other.py"],
                 },
@@ -215,9 +216,10 @@ class ExecutorTests(unittest.TestCase):
                     "id": "task_1",
                     "type": "apply_git_operation",
                     "project_path": str(repo),
-                    "approved": True,
+                    **approval_fields(),
                     "operation": "pull",
                     "params": ["not", "an", "object"],
+                    "expected_command": ["git", "pull", "--ff-only"],
                 },
                 config,
             )
@@ -256,16 +258,17 @@ class ExecutorTests(unittest.TestCase):
                 allowed_root=Path(temp_dir),
             )
 
+            script = "printf '%s:%s\\n' \"$PROJECTPILOT_TEST\" \"$1\"\npwd\n"
             result = execute_task(
                 {
                     "id": "task_1",
                     "type": "run_local_script",
                     "project_path": temp_dir,
-                    "approved": True,
+                    **approval_fields(script=script),
                     "interpreter": "sh",
                     "args": ["one"],
                     "env": {"PROJECTPILOT_TEST": "yes"},
-                    "script": "printf '%s:%s\\n' \"$PROJECTPILOT_TEST\" \"$1\"\npwd\n",
+                    "script": script,
                 },
                 config,
             )
@@ -293,7 +296,7 @@ class ExecutorTests(unittest.TestCase):
                     "executor_id": "server-b",
                     "payload": {
                         "project_path": temp_dir,
-                        "approved": True,
+                        **approval_fields(script="printf backend-shape-ok\n"),
                         "interpreter": "bash",
                         "script": "printf backend-shape-ok\n",
                     },
@@ -319,9 +322,8 @@ class ExecutorTests(unittest.TestCase):
                     "id": "task_1",
                     "type": "run_local_script",
                     "project_path": temp_dir,
-                    "approved": True,
+                    **approval_fields(script_sha256="wrong"),
                     "script": "echo hello\n",
-                    "script_sha256": "wrong",
                 },
                 config,
             )
@@ -424,7 +426,7 @@ class ExecutorTests(unittest.TestCase):
                         "type": "apply_remote_git_operation",
                         "ssh_host": "prod-server",
                         "project_path": "/srv/app",
-                        "approved": True,
+                        **approval_fields(),
                         "operation": "pull",
                         "expected_command": ["git", "pull", "--ff-only"],
                     },
@@ -591,15 +593,15 @@ class ExecutorTests(unittest.TestCase):
                     "operation": "run_remote_script",
                     "exit_code": 0,
                 }
+                script = "echo hello\n"
                 result = execute_task(
                     {
                         "id": "task_1",
                         "type": "run_remote_script",
                         "ssh_host": "prod-server",
                         "project_path": "/srv/app",
-                        "approved": True,
-                        "script": "echo hello\n",
-                        "script_sha256": "abc",
+                        **approval_fields(script=script),
+                        "script": script,
                         "params": {"env": {"APP_ENV": "test"}, "args": ["one"]},
                     },
                     config,
@@ -613,7 +615,7 @@ class ExecutorTests(unittest.TestCase):
                 interpreter="bash",
                 args=["one"],
                 env={"APP_ENV": "test"},
-                expected_sha256="abc",
+                expected_sha256=sha256_text("echo hello\n"),
                 auth_mode="key",
                 timeout=20,
             )
@@ -629,14 +631,15 @@ class ExecutorTests(unittest.TestCase):
 
             with patch("projectpilot.executor.client.run_remote_script") as run_remote_script:
                 run_remote_script.return_value = {"success": True, "exit_code": 0}
+                script = "whoami\n"
                 result = execute_task(
                     {
                         "id": "task_1",
                         "type": "run_remote_script",
                         "ssh_host": "ubuntu",
                         "project_path": "/home/hzy",
-                        "approved": True,
-                        "script": "whoami\n",
+                        **approval_fields(script=script),
+                        "script": script,
                         "ssh_auth_mode": "password",
                     },
                     config,
@@ -719,6 +722,25 @@ def read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     if length == 0:
         return {}
     return json.loads(handler.rfile.read(length).decode("utf-8"))
+
+
+def approval_fields(script: str | None = None, script_sha256: str | None = None) -> dict[str, Any]:
+    payload = {
+        "approved": True,
+        "approval_id": "approval-test",
+        "approved_by": "tester",
+        "approved_at": "2026-01-01T00:00:00+00:00",
+        "approval_expires_at": "2099-01-01T00:00:00+00:00",
+    }
+    if script is not None:
+        payload["script_sha256"] = sha256_text(script)
+    if script_sha256 is not None:
+        payload["script_sha256"] = script_sha256
+    return payload
+
+
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

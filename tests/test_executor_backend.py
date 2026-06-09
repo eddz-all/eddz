@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -99,7 +100,8 @@ class ExecutorBackendTests(unittest.TestCase):
                     "type": "apply_git_operation",
                     "project_path": temp_dir,
                     "operation": "pull",
-                    "approved": True,
+                    "expected_command": ["git", "pull", "--ff-only"],
+                    **approval_fields(),
                 }
             )
             store.record_executor_poll(
@@ -141,7 +143,8 @@ class ExecutorBackendTests(unittest.TestCase):
                     "type": "run_remote_script",
                     "ssh_host": "prod-server",
                     "project_path": "/srv/app",
-                    "approved": True,
+                    "script": "echo ok\n",
+                    **approval_fields(script="echo ok\n"),
                 }
             )
             store.record_executor_poll(
@@ -185,7 +188,8 @@ class ExecutorBackendTests(unittest.TestCase):
                     "id": "task_1",
                     "type": "run_local_script",
                     "project_path": "/home/hzy/project/web",
-                    "approved": True,
+                    "script": "echo ok\n",
+                    **approval_fields(script="echo ok\n"),
                 }
             )
             store.claim_next_task("server-b", ["run_local_script"])
@@ -355,6 +359,19 @@ def init_repo(repo: Path) -> None:
     (repo / "tracked.txt").write_text("initial\n", encoding="utf-8")
     run(["git", "add", "tracked.txt"], repo)
     run(["git", "commit", "-m", "initial"], repo)
+
+
+def approval_fields(script: str | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "approved": True,
+        "approval_id": "approval-test",
+        "approved_by": "tester",
+        "approved_at": "2026-01-01T00:00:00+00:00",
+        "approval_expires_at": "2099-01-01T00:00:00+00:00",
+    }
+    if script is not None:
+        payload["script_sha256"] = hashlib.sha256(script.encode("utf-8")).hexdigest()
+    return payload
 
 
 def run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

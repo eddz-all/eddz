@@ -34,6 +34,7 @@ from projectpilot.executor.client import poll_and_run_once, run_connect_loop
 from projectpilot.executor.config import build_config, default_config_path, load_config, save_config
 from projectpilot.executor.publisher import (
     PublishTarget,
+    build_approval_metadata,
     build_project_detect_path,
     build_task_payload,
     parse_json_object,
@@ -550,6 +551,9 @@ def build_parser() -> argparse.ArgumentParser:
     enqueue_command.add_argument("--ssh-host", help="SSH Host alias for remote tasks.")
     enqueue_command.add_argument("--operation", help="Git operation for approved execution tasks.")
     enqueue_command.add_argument("--approved", action="store_true", help="Mark execution task as approved.")
+    enqueue_command.add_argument("--approved-by", help="Human approver for approved execution tasks.")
+    enqueue_command.add_argument("--approval-id", help="Stable approval id for approved execution tasks.")
+    enqueue_command.add_argument("--approval-expires-at", help="ISO timestamp when execution approval expires.")
     enqueue_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
     enqueue_command.add_argument("--params-json", help="Task params as a JSON object.")
     enqueue_command.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
@@ -590,6 +594,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_local_command.add_argument("--ssh-host", help="SSH Host alias for remote tasks.")
     run_local_command.add_argument("--operation", help="Git operation for approved execution tasks.")
     run_local_command.add_argument("--approved", action="store_true", help="Mark execution task as approved.")
+    run_local_command.add_argument("--approved-by", help="Human approver for approved execution tasks.")
+    run_local_command.add_argument("--approval-id", help="Stable approval id for approved execution tasks.")
+    run_local_command.add_argument("--approval-expires-at", help="ISO timestamp when execution approval expires.")
     run_local_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
     run_local_command.add_argument("--params-json", help="Task params as a JSON object.")
     run_local_command.set_defaults(handler=handle_executor_run_local)
@@ -625,6 +632,9 @@ def build_parser() -> argparse.ArgumentParser:
     publish_command.add_argument("--ssh-host", help="SSH Host alias for remote tasks.")
     publish_command.add_argument("--operation", help="Git operation for approved Git tasks.")
     publish_command.add_argument("--approved", action="store_true", help="Mark execution task as approved.")
+    publish_command.add_argument("--approved-by", help="Human approver for approved execution tasks.")
+    publish_command.add_argument("--approval-id", help="Stable approval id for approved execution tasks.")
+    publish_command.add_argument("--approval-expires-at", help="ISO timestamp when execution approval expires.")
     publish_command.add_argument("--expected-command", nargs="+", help="Approved command array.")
     publish_command.add_argument("--params-json", help="Task params as a JSON object.")
     publish_command.add_argument("--script", help="Script body for script tasks.")
@@ -1445,6 +1455,9 @@ def build_publish_request_from_args(args: argparse.Namespace, defaults: dict[str
         params=params,
         script=script,
         interpreter=args.interpreter,
+        approved_by=args.approved_by,
+        approval_id=args.approval_id,
+        approval_expires_at=args.approval_expires_at,
     )
 
 
@@ -1471,6 +1484,13 @@ def build_executor_task_payload(args: argparse.Namespace) -> dict[str, Any]:
         payload["operation"] = args.operation
     if args.approved:
         payload["approved"] = True
+        payload.update(
+            build_approval_metadata(
+                approved_by=getattr(args, "approved_by", None),
+                approval_id=getattr(args, "approval_id", None),
+                approval_expires_at=getattr(args, "approval_expires_at", None),
+            )
+        )
     if args.expected_command:
         payload["expected_command"] = args.expected_command
     if args.params_json:

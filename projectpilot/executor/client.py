@@ -24,7 +24,13 @@ from projectpilot.executor.remote import (
     run_remote_script,
     sha256_text,
 )
-from projectpilot.executor.security import PathNotAllowedError, resolve_allowed_project_path, validate_remote_project_path
+from projectpilot.executor.security import (
+    ApprovalError,
+    PathNotAllowedError,
+    resolve_allowed_project_path,
+    validate_execution_approval,
+    validate_remote_project_path,
+)
 from projectpilot.integration.member_b import detect_local_environment, detect_local_git_status
 
 EXECUTOR_CAPABILITIES = [
@@ -173,6 +179,10 @@ def execute_task(task: dict[str, Any], config: ExecutorConfig) -> dict[str, Any]
     if task_type == "smart_git_analyze":
         return execute_smart_git_analyze(task, resolved_path)
     if task_type == "apply_git_operation":
+        try:
+            validate_execution_approval(task, task_type=task_type)
+        except ApprovalError as exc:
+            return failure("approval_required", str(exc))
         return execute_local_git_operation(task, resolved_path)
     if task_type in LOCAL_SCRIPT_TASK_TYPES:
         return execute_local_script_task(task_type, task, resolved_path)
@@ -229,8 +239,10 @@ def execute_remote_task(task_type: str, task: dict[str, Any], config: ExecutorCo
         if task_type == "detect_remote_environment":
             return detect_remote_environment(host, project_path, timeout=timeout, auth_mode=ssh_auth_mode)
         if task_type == "apply_remote_git_operation":
-            if not task.get("approved"):
-                return failure("approval_required", "Remote Git execution tasks require approved: true.")
+            try:
+                validate_execution_approval(task, task_type=task_type)
+            except ApprovalError as exc:
+                return failure("approval_required", str(exc))
             expected_command = task.get("expected_command")
             if expected_command is not None and (
                 not isinstance(expected_command, list) or not all(isinstance(item, str) for item in expected_command)
@@ -246,11 +258,16 @@ def execute_remote_task(task_type: str, task: dict[str, Any], config: ExecutorCo
                 auth_mode=ssh_auth_mode,
             )
         if task_type in REMOTE_SCRIPT_TASK_TYPES:
-            if not task.get("approved"):
-                return failure("approval_required", "Remote script execution tasks require approved: true.")
+            script = normalize_script(extract_script(task))
+            script_sha256 = sha256_text(script)
+            try:
+                validate_execution_approval(task, task_type=task_type, script_sha256=script_sha256)
+            except ApprovalError as exc:
+                error_type = "script_hash_mismatch" if "hash does not match" in str(exc) else "approval_required"
+                return failure(error_type, str(exc))
             return run_remote_script(
                 host,
-                extract_script(task),
+                script,
                 project_path=project_path,
                 interpreter=str(task.get("interpreter") or params.get("interpreter") or "bash"),
                 args=script_args(task, params),
@@ -266,14 +283,16 @@ def execute_remote_task(task_type: str, task: dict[str, Any], config: ExecutorCo
 
 
 def execute_local_script_task(task_type: str, task: dict[str, Any], resolved_path: Path) -> dict[str, Any]:
-    if not task.get("approved"):
-        return failure("approval_required", "Local script execution tasks require approved: true.")
-
     try:
         timeout = int(task.get("timeout") or 60)
         params = extract_script_params(task)
         script = normalize_script(extract_script(task))
         script_sha256 = sha256_text(script)
+        try:
+            validate_execution_approval(task, task_type=task_type, script_sha256=script_sha256)
+        except ApprovalError as exc:
+            error_type = "script_hash_mismatch" if "hash does not match" in str(exc) else "approval_required"
+            return failure(error_type, str(exc))
         expected_sha256 = script_expected_hash(task, params)
         if expected_sha256 and expected_sha256 != script_sha256:
             return {

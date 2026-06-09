@@ -9,6 +9,7 @@ from routers import (
     debug,
     environment_snapshots,
     execution,
+    executor_tasks,
     git_status,
     operation_logs,
     projects,
@@ -49,6 +50,7 @@ app.include_router(status.router)
 app.include_router(ai.router)
 app.include_router(reports.router)
 app.include_router(execution.router)
+app.include_router(executor_tasks.router)
 app.include_router(detection.router)
 app.include_router(operation_logs.router)
 app.include_router(debug.router)

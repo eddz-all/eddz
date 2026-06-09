@@ -14,7 +14,11 @@
     "tauri:dev": "node scripts/run-tauri.mjs dev",
     "tauri:build": "node scripts/run-tauri.mjs build",
     "tauri:build:exe": "node scripts/run-tauri.mjs build --no-bundle",
-    "tauri:info": "node scripts/run-tauri.mjs info"
+    "tauri:info": "node scripts/run-tauri.mjs info",
+    "release:macos": "node scripts/release-macos.mjs",
+    "release:update-manifest": "node scripts/write-update-manifest.mjs",
+    "tauri:signer:generate": "npx tauri signer generate",
+    "test:e2e": "node scripts/e2e-local-demo.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

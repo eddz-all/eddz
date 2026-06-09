@@ -289,8 +289,8 @@ Frontend/Desktop
 - 智能 Git 生成 `OperationPlan`；
 - 后端保存计划；
 - 用户批准；
-- Executor 收到 `approved: true`；
-- Executor 校验 `expected_command`；
+- Executor 收到 `approved: true` 和完整审批元数据；
+- Executor 校验 `approval_expires_at` 和 `expected_command`；
 - 执行结果写 audit。
 
 智能 Git 不直接向后端发 HTTP 请求。
@@ -1752,4 +1752,3 @@ projectpilot git analyze <repo> --json
 Executor 可以通过 smart_git_analyze 任务在 allowed root 内执行同样分析。
 所有新增能力均为 read-only，测试全部通过。
 ```
-

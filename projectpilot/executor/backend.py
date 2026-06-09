@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import re
 import threading
@@ -9,6 +10,14 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+from projectpilot.executor.remote import normalize_script, sha256_text
+from projectpilot.executor.security import (
+    ApprovalError,
+    EXECUTION_TASK_TYPES,
+    SCRIPT_TASK_TYPES,
+    validate_execution_approval,
+)
 
 
 DEFAULT_BACKEND_DATA = {
@@ -42,6 +51,7 @@ class ExecutorBackendStore:
         task_type = str(task.get("type") or "").strip()
         if not task_type:
             raise ValueError("Task is missing type.")
+        self._validate_task_before_queue(task_type, task)
 
         now = utc_now()
         stored_task = dict(task)
@@ -59,6 +69,18 @@ class ExecutorBackendStore:
             data["tasks"].append(stored_task)
             self._save_unlocked(data)
         return stored_task
+
+    def _validate_task_before_queue(self, task_type: str, task: dict[str, Any]) -> None:
+        if task_type not in EXECUTION_TASK_TYPES:
+            return
+        try:
+            script_sha256 = None
+            if task_type in SCRIPT_TASK_TYPES:
+                script = normalize_script(script_from_task(task))
+                script_sha256 = sha256_text(script)
+            validate_execution_approval(task, task_type=task_type, script_sha256=script_sha256)
+        except ApprovalError as exc:
+            raise ValueError(str(exc)) from exc
 
     def record_executor_poll(self, payload: dict[str, Any]) -> dict[str, Any]:
         executor_id = str(payload.get("executor_id") or "").strip()
@@ -370,3 +392,17 @@ def operation_streams(result: dict[str, Any]) -> tuple[Any, Any]:
         stdout = stdout if stdout is not None else nested_result.get("stdout")
         stderr = stderr if stderr is not None else nested_result.get("stderr")
     return stdout, stderr
+
+
+def script_from_task(task: dict[str, Any]) -> str:
+    for key in ("script", "script_content", "script_body"):
+        value = task.get(key)
+        if value is not None:
+            return str(value)
+    encoded = task.get("script_base64")
+    if encoded is not None:
+        try:
+            return base64.b64decode(str(encoded), validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ApprovalError("script_base64 must be valid UTF-8 base64.") from exc
+    raise ApprovalError("Script execution approval requires a script payload.")
