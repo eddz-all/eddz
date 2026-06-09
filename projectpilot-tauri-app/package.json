@@ -1,0 +1,22 @@
+{
+  "name": "projectpilot-tauri-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "node scripts/dev-server.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "dev:backend": "node scripts/run-python.mjs -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:full": "node scripts/dev-full.mjs",
+    "seed:backend": "node scripts/run-python.mjs seed.py",
+    "build": "node scripts/build-static.mjs",
+    "preview": "node scripts/dev-server.mjs dist",
+    "tauri:dev": "node scripts/run-tauri.mjs dev",
+    "tauri:build": "node scripts/run-tauri.mjs build",
+    "tauri:build:exe": "node scripts/run-tauri.mjs build --no-bundle",
+    "tauri:info": "node scripts/run-tauri.mjs info"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

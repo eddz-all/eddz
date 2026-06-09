@@ -6,6 +6,16 @@ ProjectPilot is an intelligent Git assistant. It helps you understand repository
 
 Read the GitHub-ready innovation design here: [ProjectPilot Innovation Design](docs/PROJECTPILOT_INNOVATION_DESIGN.md).
 
+## Repository Layout
+
+The repository is organized around three product surfaces:
+
+- `projectpilot/` is the Python package. It contains the backend control console, the headless executor, Git intelligence, integration helpers, and shared models.
+- `projectpilot-tauri-app/` is the human-facing desktop prototype. It contains a Tauri shell, browser UI, and local FastAPI backend for the management experience.
+- `docs/` and the top-level Chinese planning documents describe product design, backend handoff, and Smart Git architecture.
+
+Executor code must stay headless. Human-facing UI belongs in the backend control console or the desktop app, not inside the executor worker.
+
 ## Install
 
 From this workspace:
@@ -148,15 +158,9 @@ environment = detect_local_environment("/path/to/project")
 
 Both functions return structured `dict` data. They do not write to the database or call backend APIs. The backend can store successful results as `GitStatus` and `EnvironmentSnapshot`, and can handle failures through the shared `success`, `error_type`, and `message` fields.
 
-## Executor Connection Helper
+## Headless Executor
 
-Open the local Executor app:
-
-```bash
-projectpilot executor app
-```
-
-The Executor is also packaged as its own command, so it can be used like a standalone tool:
+The Executor is a headless worker. It does not require or provide a GUI; configure it from the CLI and run it as a polling process:
 
 ```bash
 projectpilot-executor --version
@@ -171,20 +175,6 @@ Without installing the console script, run the same software module directly:
 python3 -m projectpilot.executor --version
 python3 -m projectpilot.executor connect --once --json
 ```
-
-Open the native macOS window:
-
-```bash
-./script/build_and_run.sh
-```
-
-After the first build, the native bundle is available at:
-
-```text
-dist/ProjectPilot Executor Native.app
-```
-
-The native app opens a SwiftUI window for saving connection settings, choosing the allowed root folder, running one poll, and starting or stopping the executor loop. The browser app remains available through `projectpilot executor app` as a lightweight fallback.
 
 ProjectPilot has two roles:
 
@@ -236,7 +226,7 @@ projectpilot executor server-b
 The built-in profile uses:
 
 ```text
-server_url: https://printable-played-chances-response.trycloudflare.com
+server_url: https://unique-painted-runner-last.trycloudflare.com
 executor_id: server-b
 allowed_root: /home/hzy
 project_path: /home/hzy/project/web
@@ -344,7 +334,7 @@ Use the task publisher when a backend operator wants to queue executor work from
 
 ```bash
 projectpilot executor publish \
-  --server-url https://printable-played-chances-response.trycloudflare.com \
+  --server-url https://unique-painted-runner-last.trycloudflare.com \
   --token dev-token \
   --executor-id server-b \
   --project-path /home/hzy/project/web \
@@ -357,7 +347,7 @@ For the teammate backend's existing project/server binding flow, trigger detecti
 
 ```bash
 projectpilot executor publish \
-  --server-url https://printable-played-chances-response.trycloudflare.com \
+  --server-url https://unique-painted-runner-last.trycloudflare.com \
   --token dev-token \
   --mode project-detect \
   --project-id 1 \

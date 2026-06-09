@@ -15,3 +15,22 @@ target/
 .projectpilot/reports/
 .projectpilot/audit/
 .DS_Store
+
+# ProjectPilot desktop app local state and build outputs
+projectpilot-tauri-app/.cargo/
+projectpilot-tauri-app/.npm-cache/
+projectpilot-tauri-app/.rustup/
+projectpilot-tauri-app/.venv/
+projectpilot-tauri-app/.venv-macos/
+projectpilot-tauri-app/backend/**/__pycache__/
+projectpilot-tauri-app/backend/*.db
+projectpilot-tauri-app/dist/
+projectpilot-tauri-app/dist-app/
+projectpilot-tauri-app/node_modules/
+projectpilot-tauri-app/projectpilot.db
+projectpilot-tauri-app/src-tauri/gen/
+projectpilot-tauri-app/src-tauri/target/
+projectpilot-tauri-app/vendor/**/.cargo-ok
+projectpilot-tauri-app/vendor/**/.cargo_vcs_info.json
+projectpilot-tauri-app/vendor/**/.changes/
+projectpilot-tauri-app/vendor/**/.github/
