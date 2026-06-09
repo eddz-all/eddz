@@ -4,6 +4,7 @@ const API_BASE_VERSION = "20260609-cloudflare-unique-painted";
 const DEFAULT_API_BASE = "https://unique-painted-runner-last.trycloudflare.com";
 const LOCAL_API_PROXY_BASE = "/api";
 const SESSION_KEY = "projectpilot.session";
+const LOCAL_DEMO_KEY = "projectpilot.localDemo.v1";
 const MISSING_VALUE = "未返回";
 
 const apiContract = [
@@ -37,6 +38,8 @@ const state = {
   user: readSession(),
   apiBase: initialApiBase,
   backendMode: "checking",
+  backendIssue: "",
+  localDemoActive: false,
   isLoading: false,
   toast: "",
   drafts: {
@@ -151,6 +154,786 @@ function readApiBase() {
 
 function saveSession(user) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+}
+
+function localTimestamp(minutesAgo = 0) {
+  return new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
+}
+
+function defaultLocalDemoData() {
+  const createdAt = localTimestamp(42);
+  const scannedAt = localTimestamp(7);
+  return {
+    nextProjectId: 2,
+    nextServerId: 3,
+    nextBindingId: 2,
+    nextGitStatusId: 2,
+    nextEnvironmentSnapshotId: 2,
+    nextOperationLogId: 3,
+    nextTaskId: 3,
+    projects: [
+      {
+        id: 1,
+        name: "ProjectPilot Workspace",
+        path: "/Users/eddz/work/engine",
+        description: "Local desktop demo workspace",
+        created_at: createdAt
+      }
+    ],
+    servers: [
+      {
+        id: 1,
+        name: "Local Executor",
+        host: "127.0.0.1",
+        port: 22,
+        username: "eddz",
+        connection_mode: "local",
+        connection_status: "online",
+        description: "Local machine used for desktop workflow validation",
+        created_at: createdAt
+      },
+      {
+        id: 2,
+        name: "server-b",
+        host: "192.168.0.20",
+        port: 22,
+        username: "hzy",
+        connection_mode: "executor",
+        connection_status: "ready",
+        description: "Headless executor profile placeholder",
+        created_at: localTimestamp(35)
+      }
+    ],
+    bindings: [
+      {
+        id: 1,
+        project_id: 1,
+        server_id: 1,
+        project_path: "/Users/eddz/work/engine",
+        created_at: localTimestamp(38)
+      }
+    ],
+    gitStatuses: [
+      {
+        id: 1,
+        project_id: 1,
+        server_id: 1,
+        branch: "main",
+        remote_url: "local-demo",
+        ahead: 3,
+        behind: 0,
+        has_uncommitted_changes: false,
+        last_commit: "b049d2c Add ProjectPilot Tauri desktop app",
+        created_at: scannedAt
+      }
+    ],
+    environmentSnapshots: [
+      {
+        id: 1,
+        project_id: 1,
+        server_id: 1,
+        os: "macOS",
+        architecture: "arm64",
+        python_version: "Python 3",
+        node_version: "Node.js",
+        docker_installed: true,
+        docker_running: false,
+        cuda_version: null,
+        disk_usage: "62%",
+        raw_data: {
+          source: "local-demo"
+        },
+        created_at: scannedAt
+      }
+    ],
+    operationLogs: [
+      {
+        id: 1,
+        project_id: 1,
+        server_id: 1,
+        operation_type: "detect_project_server",
+        risk_level: "medium",
+        status: "completed",
+        summary: "Local demo detection completed",
+        detail: "Backend was unavailable, so ProjectPilot used the local demo store.",
+        created_at: scannedAt
+      },
+      {
+        id: 2,
+        project_id: 1,
+        server_id: null,
+        operation_type: "desktop_bootstrap",
+        risk_level: "low",
+        status: "completed",
+        summary: "Desktop local workflow is ready",
+        detail: "Project, server, binding, detection and task stream are available without a remote backend.",
+        created_at: localTimestamp(10)
+      }
+    ],
+    executorTasks: [
+      {
+        id: "local-1",
+        project_id: 1,
+        server_id: 1,
+        task_type: "detect_git",
+        status: "completed",
+        executor_id: "local-demo",
+        message: "Git status captured in local demo mode",
+        result: {
+          success: true,
+          branch: "main",
+          remote_url: "local-demo",
+          ahead: 3,
+          behind: 0,
+          has_uncommitted_changes: false,
+          last_commit: "b049d2c Add ProjectPilot Tauri desktop app",
+          created_at: scannedAt
+        },
+        created_at: scannedAt,
+        claimed_at: scannedAt,
+        completed_at: scannedAt
+      },
+      {
+        id: "local-2",
+        project_id: 1,
+        server_id: 1,
+        task_type: "detect_environment",
+        status: "completed",
+        executor_id: "local-demo",
+        message: "Environment snapshot captured in local demo mode",
+        result: {
+          success: true,
+          os: "macOS",
+          architecture: "arm64",
+          python_version: "Python 3",
+          node_version: "Node.js",
+          docker_installed: true,
+          docker_running: false,
+          disk_usage: "62%",
+          created_at: scannedAt
+        },
+        created_at: scannedAt,
+        claimed_at: scannedAt,
+        completed_at: scannedAt
+      }
+    ]
+  };
+}
+
+function ensureLocalDemoData(value) {
+  const fallback = defaultLocalDemoData();
+  const data = value && typeof value === "object" ? { ...fallback, ...value } : fallback;
+  const arrayKeys = [
+    "projects",
+    "servers",
+    "bindings",
+    "gitStatuses",
+    "environmentSnapshots",
+    "operationLogs",
+    "executorTasks"
+  ];
+  arrayKeys.forEach((key) => {
+    if (!Array.isArray(data[key])) {
+      data[key] = fallback[key];
+    }
+  });
+
+  const nextId = (items, key = "id") =>
+    Math.max(0, ...items.map((item) => Number(item[key])).filter(Number.isFinite)) + 1;
+
+  data.nextProjectId = Math.max(Number(data.nextProjectId) || 1, nextId(data.projects));
+  data.nextServerId = Math.max(Number(data.nextServerId) || 1, nextId(data.servers));
+  data.nextBindingId = Math.max(Number(data.nextBindingId) || 1, nextId(data.bindings));
+  data.nextGitStatusId = Math.max(Number(data.nextGitStatusId) || 1, nextId(data.gitStatuses));
+  data.nextEnvironmentSnapshotId = Math.max(
+    Number(data.nextEnvironmentSnapshotId) || 1,
+    nextId(data.environmentSnapshots)
+  );
+  data.nextOperationLogId = Math.max(Number(data.nextOperationLogId) || 1, nextId(data.operationLogs));
+  data.nextTaskId = Math.max(
+    Number(data.nextTaskId) || 1,
+    Math.max(
+      0,
+      ...data.executorTasks
+        .map((task) => Number(String(task.id).replace(/^local-/, "")))
+        .filter(Number.isFinite)
+    ) + 1
+  );
+
+  return data;
+}
+
+function readLocalDemoData() {
+  try {
+    return ensureLocalDemoData(JSON.parse(localStorage.getItem(LOCAL_DEMO_KEY) || "null"));
+  } catch {
+    return defaultLocalDemoData();
+  }
+}
+
+function writeLocalDemoData(data) {
+  localStorage.setItem(LOCAL_DEMO_KEY, JSON.stringify(data));
+}
+
+function localFormatServer(server) {
+  return {
+    id: server.id,
+    name: server.name,
+    host: server.host,
+    port: server.port,
+    username: server.username,
+    connection_mode: server.connection_mode,
+    connection_status: server.connection_status,
+    description: server.description,
+    created_at: server.created_at
+  };
+}
+
+function localLatestByServer(items, projectId, serverId) {
+  return items
+    .filter((item) => Number(item.project_id) === Number(projectId) && Number(item.server_id) === Number(serverId))
+    .sort((left, right) => parseTimestamp(right.created_at) - parseTimestamp(left.created_at))[0] || null;
+}
+
+function localBindingRows(data, projectId) {
+  return data.bindings
+    .filter((binding) => Number(binding.project_id) === Number(projectId))
+    .map((binding) => {
+      const server = data.servers.find((item) => Number(item.id) === Number(binding.server_id)) || {};
+      return {
+        binding_id: binding.id,
+        project_id: binding.project_id,
+        server_id: binding.server_id,
+        server_name: server.name,
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        connection_mode: server.connection_mode,
+        connection_status: server.connection_status,
+        project_path: binding.project_path,
+        created_at: binding.created_at
+      };
+    });
+}
+
+function localStatusServer(data, binding) {
+  const server = data.servers.find((item) => Number(item.id) === Number(binding.server_id)) || {};
+  return {
+    server_id: binding.server_id,
+    server_name: server.name,
+    host: server.host,
+    port: server.port,
+    username: server.username,
+    connection_mode: server.connection_mode,
+    connection_status: server.connection_status,
+    project_path: binding.project_path,
+    latest_git_status: localLatestByServer(data.gitStatuses, binding.project_id, binding.server_id),
+    latest_environment_snapshot: localLatestByServer(
+      data.environmentSnapshots,
+      binding.project_id,
+      binding.server_id
+    )
+  };
+}
+
+function localProjectStatus(data, projectId) {
+  const project = data.projects.find((item) => Number(item.id) === Number(projectId)) || null;
+  return {
+    project,
+    servers: data.bindings
+      .filter((binding) => Number(binding.project_id) === Number(projectId))
+      .map((binding) => localStatusServer(data, binding))
+  };
+}
+
+function localAddOperationLog(data, payload) {
+  const log = {
+    id: data.nextOperationLogId,
+    project_id: payload.project_id ?? null,
+    server_id: payload.server_id ?? null,
+    operation_type: payload.operation_type,
+    risk_level: payload.risk_level || "low",
+    status: payload.status || "completed",
+    summary: payload.summary,
+    detail: payload.detail || null,
+    created_at: localTimestamp()
+  };
+  data.nextOperationLogId += 1;
+  data.operationLogs.unshift(log);
+  return log;
+}
+
+function localAddTask(data, payload) {
+  const now = localTimestamp();
+  const task = {
+    id: `local-${data.nextTaskId}`,
+    project_id: payload.project_id,
+    server_id: payload.server_id,
+    task_type: payload.task_type,
+    status: payload.status || "completed",
+    executor_id: payload.executor_id || "local-demo",
+    message: payload.message,
+    result: payload.result || null,
+    created_at: payload.created_at || now,
+    claimed_at: payload.claimed_at || now,
+    completed_at: payload.completed_at || now
+  };
+  data.nextTaskId += 1;
+  data.executorTasks.unshift(task);
+  return task;
+}
+
+function localCreateDetection(data, projectId, serverId) {
+  const project = data.projects.find((item) => Number(item.id) === Number(projectId));
+  const server = data.servers.find((item) => Number(item.id) === Number(serverId));
+  const binding = data.bindings.find(
+    (item) => Number(item.project_id) === Number(projectId) && Number(item.server_id) === Number(serverId)
+  );
+  if (!project || !server || !binding) {
+    return null;
+  }
+
+  const now = localTimestamp();
+  const gitStatus = {
+    id: data.nextGitStatusId,
+    project_id: project.id,
+    server_id: server.id,
+    branch: "main",
+    remote_url: "local-demo",
+    ahead: state.backendMode === "local" ? 3 : 0,
+    behind: 0,
+    has_uncommitted_changes: false,
+    last_commit: "local-demo detection",
+    created_at: now
+  };
+  data.nextGitStatusId += 1;
+  data.gitStatuses.push(gitStatus);
+
+  const environmentSnapshot = {
+    id: data.nextEnvironmentSnapshotId,
+    project_id: project.id,
+    server_id: server.id,
+    os: navigator.platform || "local",
+    architecture: navigator.userAgent.includes("Mac") ? "arm64" : "local",
+    python_version: "Python 3",
+    node_version: "Node.js",
+    docker_installed: true,
+    docker_running: server.connection_mode === "executor",
+    cuda_version: null,
+    disk_usage: server.connection_mode === "executor" ? "55%" : "62%",
+    raw_data: {
+      source: "local-demo",
+      project_path: binding.project_path
+    },
+    created_at: now
+  };
+  data.nextEnvironmentSnapshotId += 1;
+  data.environmentSnapshots.push(environmentSnapshot);
+
+  const gitTask = localAddTask(data, {
+    project_id: project.id,
+    server_id: server.id,
+    task_type: "detect_git",
+    message: `Git detection completed for ${project.name}`,
+    result: {
+      success: true,
+      branch: gitStatus.branch,
+      remote_url: gitStatus.remote_url,
+      ahead: gitStatus.ahead,
+      behind: gitStatus.behind,
+      has_uncommitted_changes: gitStatus.has_uncommitted_changes,
+      last_commit: gitStatus.last_commit,
+      created_at: gitStatus.created_at
+    }
+  });
+  const environmentTask = localAddTask(data, {
+    project_id: project.id,
+    server_id: server.id,
+    task_type: "detect_environment",
+    message: `Environment detection completed for ${server.name}`,
+    result: {
+      success: true,
+      os: environmentSnapshot.os,
+      architecture: environmentSnapshot.architecture,
+      python_version: environmentSnapshot.python_version,
+      node_version: environmentSnapshot.node_version,
+      docker_installed: environmentSnapshot.docker_installed,
+      docker_running: environmentSnapshot.docker_running,
+      disk_usage: environmentSnapshot.disk_usage,
+      created_at: environmentSnapshot.created_at
+    }
+  });
+
+  localAddOperationLog(data, {
+    project_id: project.id,
+    server_id: server.id,
+    operation_type: "detect_project_server",
+    risk_level: environmentSnapshot.docker_running ? "low" : "medium",
+    status: "completed",
+    summary: `Detected ${project.name} on ${server.name}`,
+    detail: "Generated by local demo mode."
+  });
+
+  return {
+    project_id: project.id,
+    project_name: project.name,
+    server_id: server.id,
+    server_name: server.name,
+    project_path: binding.project_path,
+    connection_mode: server.connection_mode,
+    status: "completed",
+    message: "Local detection completed",
+    git_status: gitStatus,
+    environment_snapshot: environmentSnapshot,
+    tasks: [gitTask, environmentTask]
+  };
+}
+
+function localAnalysis(data, projectId) {
+  const status = localProjectStatus(data, projectId);
+  const serverCount = status.servers.length;
+  const dockerIssues = status.servers.filter((server) => !server.latest_environment_snapshot?.docker_running).length;
+  return {
+    project_id: projectId,
+    status: "completed",
+    risk_level: dockerIssues ? "medium" : "low",
+    issues: [
+      serverCount ? `${serverCount} 个绑定服务器已进入本地状态矩阵` : "当前项目还没有绑定服务器",
+      dockerIssues ? `${dockerIssues} 个环境的 Docker 未运行` : "本地环境快照没有发现阻塞项",
+      state.localDemoActive ? "当前使用 Local Demo 数据源" : "当前使用后端数据源"
+    ],
+    recommendations: [
+      "优先验证项目、服务器、绑定、检测、任务流闭环",
+      "后端公网域名稳定后再切回远端 API"
+    ]
+  };
+}
+
+function localPlan(data, projectId, body = {}) {
+  const targetServer = data.servers.find((server) => Number(server.id) === Number(body.target_server_id));
+  return {
+    project_id: projectId,
+    target_server_id: targetServer?.id || body.target_server_id,
+    target_server_name: targetServer?.name,
+    goal: body.goal || "Validate ProjectPilot local workflow",
+    status: "ready",
+    summary: "Local demo plan is ready for executor handoff.",
+    steps: [
+      {
+        order: 1,
+        title: "Verify project binding",
+        description: "Confirm the selected project path is bound to the target server.",
+        risk_level: "low"
+      },
+      {
+        order: 2,
+        title: "Run environment detection",
+        description: "Collect Git and runtime signals before any execution.",
+        risk_level: "low"
+      },
+      {
+        order: 3,
+        title: "Queue executor-safe action",
+        description: "Keep executor work headless and report results back to the control plane.",
+        risk_level: "medium"
+      }
+    ]
+  };
+}
+
+function localMarkdownReport(data, projectId) {
+  const project = data.projects.find((item) => Number(item.id) === Number(projectId));
+  const status = localProjectStatus(data, projectId);
+  const tasks = data.executorTasks.filter((task) => Number(task.project_id) === Number(projectId));
+  return `# ${project?.name || "ProjectPilot"} Local Report
+
+| Area | Current State |
+| --- | --- |
+| Data source | Local Demo |
+| Bound servers | ${status.servers.length} |
+| Executor tasks | ${tasks.length} |
+
+## Main Flow
+
+1. Project registry is available locally.
+2. Server records can be created and selected.
+3. Project-server bindings are persisted in localStorage.
+4. Detection creates completed executor task records without launching an executor GUI.
+`;
+}
+
+function localRequest(path, options = {}) {
+  const method = options.method || "GET";
+  const url = new URL(path, window.location.origin);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const data = readLocalDemoData();
+  const body = options.body || {};
+  const commit = (response) => {
+    writeLocalDemoData(data);
+    return response;
+  };
+
+  if (method === "GET" && parts.length === 1 && parts[0] === "projects") {
+    return data.projects;
+  }
+  if (method === "POST" && parts.length === 1 && parts[0] === "projects") {
+    const project = {
+      id: data.nextProjectId,
+      name: body.name,
+      path: body.path,
+      description: body.description || "",
+      created_at: localTimestamp()
+    };
+    data.nextProjectId += 1;
+    data.projects.unshift(project);
+    localAddOperationLog(data, {
+      project_id: project.id,
+      operation_type: "create_project",
+      summary: `Created project ${project.name}`,
+      detail: project.path
+    });
+    return commit(project);
+  }
+  if (method === "GET" && parts.length === 1 && parts[0] === "servers") {
+    return data.servers.map(localFormatServer);
+  }
+  if (method === "POST" && parts.length === 1 && parts[0] === "servers") {
+    const server = {
+      id: data.nextServerId,
+      name: body.name,
+      host: body.host,
+      port: body.port,
+      username: body.username,
+      connection_mode: body.connection_mode || "executor",
+      connection_status: body.connection_mode === "local" ? "online" : "ready",
+      description: body.description || "",
+      created_at: localTimestamp()
+    };
+    data.nextServerId += 1;
+    data.servers.unshift(server);
+    localAddOperationLog(data, {
+      server_id: server.id,
+      operation_type: "create_server",
+      summary: `Created server ${server.name}`,
+      detail: `${server.host}:${server.port}`
+    });
+    return commit(localFormatServer(server));
+  }
+  if (method === "POST" && parts.length === 3 && parts[0] === "servers" && parts[2] === "check-connection") {
+    const serverId = Number(parts[1]);
+    const server = data.servers.find((item) => Number(item.id) === serverId);
+    if (!server) return null;
+    server.connection_status = server.connection_mode === "local" ? "online" : "ready";
+    localAddOperationLog(data, {
+      server_id: server.id,
+      operation_type: "check_connection",
+      summary: `Checked connection for ${server.name}`,
+      detail: "Local demo connection check completed."
+    });
+    return commit({
+      server_id: server.id,
+      server_name: server.name,
+      connection_mode: server.connection_mode,
+      connected: true,
+      message: "Local demo connection is available",
+      latency_ms: 8
+    });
+  }
+  if (method === "GET" && parts.length === 3 && parts[0] === "servers" && parts[2] === "status") {
+    const serverId = Number(parts[1]);
+    const server = data.servers.find((item) => Number(item.id) === serverId);
+    if (!server) return null;
+    const projects = data.bindings
+      .filter((binding) => Number(binding.server_id) === serverId)
+      .map((binding) => {
+        const project = data.projects.find((item) => Number(item.id) === Number(binding.project_id)) || {};
+        return {
+          binding_id: binding.id,
+          server_id: serverId,
+          project_id: project.id,
+          project_name: project.name,
+          project_path: binding.project_path,
+          latest_git_status: localLatestByServer(data.gitStatuses, project.id, serverId),
+          latest_environment_snapshot: localLatestByServer(data.environmentSnapshots, project.id, serverId)
+        };
+      });
+    return {
+      server: localFormatServer(server),
+      projects
+    };
+  }
+  if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "status") {
+    return localProjectStatus(data, Number(parts[1]));
+  }
+  if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "servers") {
+    return localBindingRows(data, Number(parts[1]));
+  }
+  if (method === "POST" && parts.length === 3 && parts[0] === "projects" && parts[2] === "bind-server") {
+    const projectId = Number(parts[1]);
+    const serverId = Number(body.server_id);
+    const existing = data.bindings.find(
+      (binding) => Number(binding.project_id) === projectId && Number(binding.server_id) === serverId
+    );
+    if (existing) {
+      existing.project_path = body.project_path;
+      return commit({
+        id: existing.id,
+        project_id: existing.project_id,
+        server_id: existing.server_id,
+        project_path: existing.project_path,
+        created_at: existing.created_at
+      });
+    }
+    const binding = {
+      id: data.nextBindingId,
+      project_id: projectId,
+      server_id: serverId,
+      project_path: body.project_path,
+      created_at: localTimestamp()
+    };
+    data.nextBindingId += 1;
+    data.bindings.unshift(binding);
+    localAddOperationLog(data, {
+      project_id: projectId,
+      server_id: serverId,
+      operation_type: "bind_server",
+      summary: "Bound project to server",
+      detail: body.project_path
+    });
+    return commit(binding);
+  }
+  if (method === "DELETE" && parts.length === 4 && parts[0] === "projects" && parts[2] === "servers") {
+    const projectId = Number(parts[1]);
+    const serverId = Number(parts[3]);
+    data.bindings = data.bindings.filter(
+      (binding) => !(Number(binding.project_id) === projectId && Number(binding.server_id) === serverId)
+    );
+    localAddOperationLog(data, {
+      project_id: projectId,
+      server_id: serverId,
+      operation_type: "unbind_server",
+      summary: "Removed project-server binding"
+    });
+    return commit({ message: "Local project-server binding deleted" });
+  }
+  if (method === "POST" && parts.length === 5 && parts[0] === "projects" && parts[2] === "servers" && parts[4] === "detect") {
+    const result = localCreateDetection(data, Number(parts[1]), Number(parts[3]));
+    return result ? commit(result) : null;
+  }
+  if (method === "GET" && parts.length === 2 && parts[0] === "executor" && parts[1] === "tasks") {
+    const projectIdParam = url.searchParams.get("project_id");
+    const projectId = projectIdParam ? Number(projectIdParam) : null;
+    const tasks = Number.isFinite(projectId)
+      ? data.executorTasks.filter((task) => Number(task.project_id) === projectId)
+      : data.executorTasks;
+    return tasks.sort((left, right) => executorTaskTimestamp(right) - executorTaskTimestamp(left));
+  }
+  if (method === "GET" && parts.length === 3 && parts[0] === "executor" && parts[1] === "tasks") {
+    return data.executorTasks.find((task) => String(task.id) === decodeURIComponent(parts[2])) || null;
+  }
+  if (method === "GET" && parts.length === 1 && parts[0] === "operation-logs") {
+    return data.operationLogs.sort((left, right) => parseTimestamp(right.created_at) - parseTimestamp(left.created_at));
+  }
+  if (method === "GET" && parts.length === 2 && parts[0] === "ai" && parts[1] === "settings") {
+    return {
+      provider: "local-demo",
+      model: "offline",
+      api_key_configured: false,
+      status: "local"
+    };
+  }
+  if (method === "POST" && parts.length === 4 && parts[0] === "projects" && parts[2] === "ai" && parts[3] === "analyze-env") {
+    return localAnalysis(data, Number(parts[1]));
+  }
+  if (method === "POST" && parts.length === 4 && parts[0] === "projects" && parts[2] === "ai" && parts[3] === "analyze-git") {
+    return {
+      project_id: Number(parts[1]),
+      status: "completed",
+      summary: "Local Git analysis completed",
+      findings: [
+        "Main branch is visible in local demo data.",
+        "Executor stays headless; task records are reported through the GUI."
+      ]
+    };
+  }
+  if (method === "POST" && parts.length === 4 && parts[0] === "projects" && parts[2] === "ai" && parts[3] === "config-plan") {
+    return localPlan(data, Number(parts[1]), body);
+  }
+  if (method === "POST" && parts.length === 4 && parts[0] === "projects" && parts[2] === "ai" && parts[3] === "plan-action") {
+    const plan = localPlan(data, Number(parts[1]), body);
+    const response = {
+      project_id: Number(parts[1]),
+      goal: body.goal,
+      status: body.auto_execute ? "queued" : "ready",
+      message: body.auto_execute ? "Local executor task queued" : "Local action plan ready",
+      target_server: data.servers.find((server) => Number(server.id) === Number(body.target_server_id)),
+      plan,
+      safety_report: plan.steps.map((step) => ({ step: step.title, level: step.risk_level }))
+    };
+    if (body.auto_execute) {
+      response.tasks = [
+        localAddTask(data, {
+          project_id: Number(parts[1]),
+          server_id: Number(body.target_server_id),
+          task_type: "execute_config_plan",
+          status: "completed",
+          message: "Local action plan executed",
+          result: {
+            success: true,
+            steps: plan.steps.length
+          }
+        })
+      ];
+      localAddOperationLog(data, {
+        project_id: Number(parts[1]),
+        server_id: Number(body.target_server_id),
+        operation_type: "plan_action",
+        risk_level: "medium",
+        summary: "Queued local executor-safe action"
+      });
+    }
+    return commit(response);
+  }
+  if (method === "POST" && parts.length === 2 && parts[0] === "reports" && parts[1] === "project") {
+    return {
+      content: localMarkdownReport(data, Number(body.project_id))
+    };
+  }
+  if (
+    method === "POST" &&
+    parts.length === 5 &&
+    parts[0] === "projects" &&
+    parts[2] === "servers" &&
+    parts[4] === "execute-config-plan"
+  ) {
+    const task = localAddTask(data, {
+      project_id: Number(parts[1]),
+      server_id: Number(parts[3]),
+      task_type: "execute_config_plan",
+      status: "completed",
+      message: "Local config plan execution completed",
+      result: {
+        success: true,
+        steps: Array.isArray(body.steps) ? body.steps.length : 0
+      }
+    });
+    localAddOperationLog(data, {
+      project_id: Number(parts[1]),
+      server_id: Number(parts[3]),
+      operation_type: "execute_config_plan",
+      risk_level: "medium",
+      summary: "Executed local config plan"
+    });
+    return commit({
+      status: "completed",
+      message: "Local config plan execution completed",
+      tasks: [task],
+      safety_report: (body.steps || []).map((step) => ({ step: step.title || step.command, level: step.risk_level || "low" })),
+      results: [{ status: "completed", message: "Simulated locally" }]
+    });
+  }
+
+  return null;
 }
 
 function escapeHtml(value) {
@@ -384,6 +1167,11 @@ function selectedTargetServer() {
 }
 
 async function request(path, options = {}, fallback) {
+  if (state.localDemoActive && !options.forceRemote) {
+    const localResult = localRequest(path, options);
+    return localResult === null ? fallback : localResult;
+  }
+
   const shouldUseProxy = shouldProxyApiBase(state.apiBase);
   const invoke = shouldUseProxy ? null : tauriInvoke();
   const url = shouldUseProxy ? `${LOCAL_API_PROXY_BASE}${path}` : `${state.apiBase}${path}`;
@@ -415,14 +1203,20 @@ async function request(path, options = {}, fallback) {
         body: options.body || null
       });
       state.backendMode = "connected";
+      state.backendIssue = "";
+      state.localDemoActive = false;
       return result;
     }
 
     const response = await fetch(url, init);
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
+      const error = new Error(`${response.status} ${response.statusText}`);
+      error.httpStatus = response.status;
+      throw error;
     }
     state.backendMode = "connected";
+    state.backendIssue = "";
+    state.localDemoActive = false;
     const text = await response.text();
     if (!text) {
       return { ok: true };
@@ -433,8 +1227,19 @@ async function request(path, options = {}, fallback) {
       return { content: text };
     }
   } catch (error) {
+    const canUseLocalDemo = !error?.httpStatus || error.httpStatus >= 500;
+    if (canUseLocalDemo) {
+      const localResult = localRequest(path, options);
+      if (localResult !== null) {
+        state.backendMode = "local";
+        state.backendIssue = error?.message || "Remote backend is unavailable";
+        state.localDemoActive = true;
+        return localResult;
+      }
+    }
     if (!options.optional) {
       state.backendMode = "error";
+      state.backendIssue = error?.message || "Request failed";
     }
     if (typeof fallback === "function") return fallback(error);
     return fallback;
@@ -461,7 +1266,10 @@ async function loadData({ silent = false } = {}) {
   state.dataLoaded.servers = Array.isArray(serversResponse);
   state.servers = state.dataLoaded.servers ? serversResponse : [];
 
-  if (!state.selectedProjectId && state.projects[0]) {
+  if (
+    state.projects[0] &&
+    (!state.selectedProjectId || !state.projects.some((project) => Number(project.id) === Number(state.selectedProjectId)))
+  ) {
     state.selectedProjectId = state.projects[0].id;
   }
 
@@ -890,6 +1698,7 @@ function render() {
       <main class="main-surface">
         ${renderTopbar()}
         <section class="workspace" data-route="${state.route}">
+          ${renderConnectionBanner()}
           ${renderRoute()}
         </section>
       </main>
@@ -911,12 +1720,12 @@ function renderLogin() {
         <div class="login-preview">
           <span></span>
           <strong>API</strong>
-          <small>Real Data</small>
+          <small>Remote or Local</small>
         </div>
       </section>
       <form class="login-panel" data-login-form data-draft-form="login">
         <h2>登录管理台</h2>
-        <p>使用本地登录入口进入，数据只来自后端接口。</p>
+        <p>使用本地登录入口进入，远端不可用时自动切到 Local Demo。</p>
         <label>
           <span>邮箱</span>
           <input name="email" type="email" value="${escapeHtml(state.drafts.login.email)}" autocomplete="email" />
@@ -972,9 +1781,41 @@ function renderSidebar() {
   `;
 }
 
+function backendModeMeta() {
+  if (state.backendMode === "connected") {
+    return {
+      className: "online",
+      label: "Backend online",
+      summary: "Remote API",
+      detail: state.apiBase
+    };
+  }
+  if (state.backendMode === "local") {
+    return {
+      className: "local",
+      label: "Local demo",
+      summary: "Local Demo Store",
+      detail: state.backendIssue || "Remote backend is unavailable."
+    };
+  }
+  if (state.backendMode === "error") {
+    return {
+      className: "error",
+      label: "Backend error",
+      summary: "Remote API unavailable",
+      detail: state.backendIssue || "Request failed."
+    };
+  }
+  return {
+    className: "checking",
+    label: "Checking API",
+    summary: "Connecting",
+    detail: state.apiBase
+  };
+}
+
 function renderTopbar() {
-  const modeClass = state.backendMode === "connected" ? "online" : state.backendMode === "error" ? "error" : "checking";
-  const modeText = state.backendMode === "connected" ? "Backend online" : state.backendMode === "error" ? "Backend error" : "Checking API";
+  const mode = backendModeMeta();
   const projectOptions = state.projects
     .map(
       (project) => `
@@ -993,7 +1834,7 @@ function renderTopbar() {
       </div>
       <div class="top-actions">
         <select data-project-select aria-label="选择项目">${projectOptions}</select>
-        <span class="connection ${modeClass}">${modeText}</span>
+        <span class="connection ${mode.className}">${mode.label}</span>
         <button class="icon-button" type="button" data-refresh title="刷新数据">↻</button>
         <button class="user-pill" type="button" data-route="settings">
           <span>${escapeHtml(state.user.initials)}</span>
@@ -1001,6 +1842,26 @@ function renderTopbar() {
         </button>
       </div>
     </header>
+  `;
+}
+
+function renderConnectionBanner() {
+  const mode = backendModeMeta();
+  if (state.backendMode === "connected") {
+    return "";
+  }
+
+  return `
+    <section class="mode-banner ${mode.className}" aria-live="polite">
+      <div>
+        <strong>${escapeHtml(mode.summary)}</strong>
+        <span>${escapeHtml(mode.detail)}</span>
+      </div>
+      <div class="row-actions">
+        <button type="button" data-use-local-demo>Use Local Demo</button>
+        <button type="button" data-retry-backend>Retry Backend</button>
+      </div>
+    </section>
   `;
 }
 
@@ -1058,6 +1919,8 @@ function renderDashboard() {
       ${renderMetric("Git Risks", gitRiskCount, "Repositories at risk", "risk")}
       ${renderMetric("Environment Issues", envIssueCount, "Servers with issues", "issue")}
     </div>
+
+    ${renderWorkflowRail()}
 
     <div class="content-grid">
       <section class="panel wide">
@@ -1144,6 +2007,62 @@ function renderDashboard() {
       <div class="steps">
         ${planSteps(state.plan).length ? planSteps(state.plan).map(renderStep).join("") : `<p class="muted-copy">${MISSING_VALUE}</p>`}
       </div>
+    </section>
+  `;
+}
+
+function renderWorkflowRail() {
+  const project = selectedProject();
+  const binding = (state.bindings || [])[0] || null;
+  const server = binding ? bindingServerRecord(binding) : null;
+  const servers = currentStatusServers();
+  const detectionServer = servers.find((item) => Number(item.server_id) === Number(binding?.server_id)) || servers[0] || null;
+  const latestTask = (state.executorTasks || [])[0] || null;
+  const git = detectionServer ? gitDisplay(detectionServer) : null;
+  const env = detectionServer ? environmentDisplay(detectionServer) : null;
+  const steps = [
+    {
+      label: "Project",
+      value: displayValue(project?.name),
+      done: Boolean(project)
+    },
+    {
+      label: "Server",
+      value: displayValue(server?.name || binding?.server_name),
+      done: Boolean(server || binding?.server_id)
+    },
+    {
+      label: "Binding",
+      value: displayValue(binding?.project_path),
+      done: Boolean(binding?.project_path)
+    },
+    {
+      label: "Detection",
+      value: git || env ? compactTime(latestServerScanTime(detectionServer)) : MISSING_VALUE,
+      done: Boolean(git || env)
+    },
+    {
+      label: "Task Result",
+      value: displayValue(latestTask?.status),
+      done: Boolean(latestTask)
+    }
+  ];
+
+  return `
+    <section class="workflow-rail" aria-label="ProjectPilot main workflow">
+      ${steps
+        .map(
+          (step, index) => `
+            <article class="${step.done ? "complete" : ""}">
+              <span>${index + 1}</span>
+              <div>
+                <strong>${escapeHtml(step.label)}</strong>
+                <small>${escapeHtml(step.value)}</small>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
     </section>
   `;
 }
@@ -1773,6 +2692,8 @@ function renderApiMap() {
 }
 
 function renderSettings() {
+  const localData = readLocalDemoData();
+  const mode = backendModeMeta();
   return `
     <div class="two-column">
       <section class="panel">
@@ -1787,6 +2708,31 @@ function renderSettings() {
           </label>
           <button type="submit">保存并重新连接</button>
         </form>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <h3>Data Source</h3>
+          <span>${escapeHtml(mode.label)}</span>
+        </div>
+        <div class="key-value-list">
+          <span>Source</span><strong>${escapeHtml(mode.summary)}</strong>
+          <span>Projects</span><strong>${escapeHtml(localData.projects.length)}</strong>
+          <span>Servers</span><strong>${escapeHtml(localData.servers.length)}</strong>
+          <span>Tasks</span><strong>${escapeHtml(localData.executorTasks.length)}</strong>
+          <span>Last Issue</span><strong>${escapeHtml(displayValue(state.backendIssue))}</strong>
+        </div>
+        <button class="full-button" type="button" data-use-local-demo>Use Local Demo</button>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <h3>Executor Boundary</h3>
+          <span>headless</span>
+        </div>
+        <div class="key-value-list">
+          <span>CLI</span><strong>projectpilot executor</strong>
+          <span>GUI</span><strong>ProjectPilot Desktop</strong>
+          <span>Worker</span><strong>No app command</strong>
+        </div>
       </section>
       <section class="panel">
         <div class="panel-header">
@@ -1834,6 +2780,18 @@ function bindShell() {
     await loadData({ silent: true });
   });
 
+  document.querySelector("[data-use-local-demo]")?.addEventListener("click", async () => {
+    await activateLocalDemo("已切换到 Local Demo");
+  });
+
+  document.querySelector("[data-retry-backend]")?.addEventListener("click", async () => {
+    state.localDemoActive = false;
+    state.backendMode = "checking";
+    state.backendIssue = "";
+    setToast("正在重新连接后端");
+    await loadData({ silent: true });
+  });
+
   document.querySelector("[data-project-select]")?.addEventListener("change", async (event) => {
     state.selectedProjectId = Number(event.currentTarget.value);
     await loadData({ silent: true });
@@ -1847,11 +2805,11 @@ function bindShell() {
     });
   });
 
-  document.querySelector("[data-project-form]")?.addEventListener("submit", handleCreateProject);
-  document.querySelector("[data-server-form]")?.addEventListener("submit", handleCreateServer);
-  document.querySelector("[data-binding-form]")?.addEventListener("submit", handleBindServer);
-  document.querySelector("[data-action-plan-form]")?.addEventListener("submit", handlePlanAction);
-  document.querySelector("[data-settings-form]")?.addEventListener("submit", handleSettings);
+  bindFormSubmit("[data-project-form]", handleCreateProject);
+  bindFormSubmit("[data-server-form]", handleCreateServer);
+  bindFormSubmit("[data-binding-form]", handleBindServer);
+  bindFormSubmit("[data-action-plan-form]", handlePlanAction);
+  bindFormSubmit("[data-settings-form]", handleSettings);
   document.querySelector("[data-generate-report]")?.addEventListener("click", handleReport);
   document.querySelector("[data-detect-project]")?.addEventListener("click", handleDetectProject);
   document.querySelector("[data-generate-ai]")?.addEventListener("click", handleRefreshAi);
@@ -1915,6 +2873,26 @@ function bindDraftInputs() {
   });
 }
 
+function bindFormSubmit(selector, handler) {
+  const form = document.querySelector(selector);
+  if (!form) return;
+
+  const runHandler = (eventLike) => {
+    Promise.resolve(handler(eventLike)).catch((error) => {
+      setToast(error?.message || "表单提交失败");
+    });
+  };
+
+  form.addEventListener("submit", runHandler);
+  form.querySelector('button[type="submit"]')?.addEventListener("click", (event) => {
+    event.preventDefault();
+    runHandler({
+      currentTarget: form,
+      preventDefault() {}
+    });
+  });
+}
+
 async function handleCreateProject(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -1944,6 +2922,14 @@ async function handleCreateProject(event) {
     description: ""
   };
   setToast("项目已创建");
+  await loadData({ silent: true });
+}
+
+async function activateLocalDemo(message = "Local Demo 已启用") {
+  state.localDemoActive = true;
+  state.backendMode = "local";
+  state.backendIssue = "Using browser localStorage as the demo backend.";
+  setToast(message);
   await loadData({ silent: true });
 }
 
@@ -2071,6 +3057,9 @@ async function handleSettings(event) {
   localStorage.setItem(API_BASE_KEY, state.apiBase);
   localStorage.setItem(API_BASE_VERSION_KEY, API_BASE_VERSION);
   state.drafts.settings.apiBase = state.apiBase;
+  state.localDemoActive = false;
+  state.backendMode = "checking";
+  state.backendIssue = "";
   setToast("后端地址已保存");
   await loadData({ silent: true });
 }
