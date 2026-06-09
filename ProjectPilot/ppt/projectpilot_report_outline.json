@@ -1,0 +1,348 @@
+{
+  "title": "ProjectPilot 项目汇报",
+  "subtitle": "多服务器项目环境管理、AI 分析与 Executor 异步执行",
+  "deck_style": {
+    "font_pair": "clean_modern_v1",
+    "visual_density": "medium",
+    "emoji_mode": "none",
+    "header_mode": "eyebrow",
+    "title_layout": "light-atlas",
+    "title_motif": "network",
+    "section_motif": "none",
+    "timeline_mode": "bands",
+    "matrix_mode": "open-quadrants",
+    "stats_mode": "tiles",
+    "footer_mode": "standard",
+    "footer_page_numbers": true
+  },
+  "slides": [
+    {
+      "type": "title",
+      "title": "ProjectPilot",
+      "subtitle": "面向多服务器项目环境管理的中央控制平台"
+    },
+    {
+      "type": "content",
+      "variant": "split",
+      "title": "为什么需要 ProjectPilot",
+      "subtitle": "多人协作项目在多台机器上运行时，状态很容易分散",
+      "bullets": [
+        "项目代码、运行环境和 Git 状态分布在不同服务器上。",
+        "Python、Node、Docker 等版本差异会导致运行结果不一致。",
+        "依赖人工 SSH 排查成本高，操作过程也难以追踪。",
+        "AI 可以辅助分析，但直接自动执行存在风险。"
+      ],
+      "highlights": [
+        "看不清：多台服务器状态分散。",
+        "改不稳：环境差异和 Git 风险难判断。",
+        "追不回：执行过程缺少统一日志。"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "cards-3",
+      "title": "项目目标",
+      "subtitle": "统一查看、分析、调度与执行",
+      "assets": {
+        "icons": ["fa6:FaFolderTree", "fa6:FaServer", "fa6:FaRobot"]
+      },
+      "cards": [
+        {
+          "title": "统一管理",
+          "body": "管理项目、服务器、绑定路径和多环境状态。",
+          "accent": "accent_primary"
+        },
+        {
+          "title": "统一检测",
+          "body": "检测 Git 状态、运行环境、Docker 状态和执行结果。",
+          "accent": "accent_secondary"
+        },
+        {
+          "title": "受控执行",
+          "body": "AI 生成计划，人工确认后由 Executor 执行并回传。",
+          "accent": "accent_primary"
+        }
+      ],
+      "takeaway": "ProjectPilot 的目标是把项目状态、AI 建议和执行过程串成闭环。"
+    },
+    {
+      "type": "content",
+      "variant": "timeline",
+      "title": "总体架构",
+      "subtitle": "中央控制 + 分布式执行",
+      "milestones": [
+        {
+          "label": "1",
+          "title": "前端控制台",
+          "body": "用户查看项目状态，发起检测、AI 分析和执行确认。"
+        },
+        {
+          "label": "2",
+          "title": "总后端",
+          "body": "统一提供 API，负责调度、聚合、AI 编排和日志记录。"
+        },
+        {
+          "label": "3",
+          "title": "数据库",
+          "body": "保存项目、服务器、快照、任务和操作日志。"
+        },
+        {
+          "label": "4",
+          "title": "Executor",
+          "body": "运行在目标服务器，主动轮询任务、执行并回传结果。"
+        }
+      ],
+      "takeaway": "前端和 Executor 都只访问总后端，后端是系统的统一事实来源。"
+    },
+    {
+      "type": "content",
+      "variant": "standard",
+      "title": "前端成果展示",
+      "subtitle": "此页等待前端同学补充实际截图",
+      "bullets": [
+        "项目总览仪表盘：待补充截图。",
+        "服务器状态列表：待补充截图。",
+        "Git 与环境矩阵：待补充截图。",
+        "AI Insight 与 Recent Activity：待补充截图。",
+        "Executor 任务队列状态展示：待补充截图。"
+      ],
+      "takeaway": "前端承担中央控制台角色，将后端聚合结果展示给用户。"
+    },
+    {
+      "type": "content",
+      "variant": "matrix",
+      "title": "后端设计",
+      "subtitle": "FastAPI 后端是调度中心和数据中心",
+      "quadrants": [
+        {
+          "title": "Routers",
+          "body": "提供项目、服务器、检测、AI、执行和日志接口。"
+        },
+        {
+          "title": "Services",
+          "body": "封装检测、执行、AI 计划和 Executor 任务编排。"
+        },
+        {
+          "title": "Models",
+          "body": "定义 Project、Server、GitStatus、EnvironmentSnapshot、ExecutorTask 等模型。"
+        },
+        {
+          "title": "Database",
+          "body": "使用 SQLite + SQLAlchemy 保存系统事实和执行历史。"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "table",
+      "title": "核心数据模型",
+      "subtitle": "围绕项目、服务器、快照、任务和日志建立状态闭环",
+      "headers": ["模型", "作用", "关键字段"],
+      "rows": [
+        ["Project", "项目基本信息", "name, path, description"],
+        ["Server", "被管理服务器", "name, host, connection_mode"],
+        ["ProjectServerMapping", "项目与服务器绑定", "project_path"],
+        ["GitStatus", "Git 成功快照", "branch, ahead, behind, last_commit"],
+        ["EnvironmentSnapshot", "环境成功快照", "python, node, docker, arch"],
+        ["ExecutorTask", "异步任务队列", "task_type, status, result"],
+        ["OperationLog", "全流程审计", "operation_type, status, details"]
+      ],
+      "caption": "同一项目可以绑定多台服务器；同一服务器也可以承载多个项目。"
+    },
+    {
+      "type": "content",
+      "variant": "timeline",
+      "title": "Executor 模式",
+      "subtitle": "服务器主动拉任务，而不是后端大量 SSH 登录",
+      "milestones": [
+        {
+          "label": "queued",
+          "title": "任务入队",
+          "body": "前端发起操作，后端创建 ExecutorTask。"
+        },
+        {
+          "label": "poll",
+          "title": "主动轮询",
+          "body": "目标服务器上的 Executor 请求 /executor/poll。"
+        },
+        {
+          "label": "run",
+          "title": "本机执行",
+          "body": "Executor 在 allowed-root 范围内检测或执行脚本。"
+        },
+        {
+          "label": "result",
+          "title": "结果回传",
+          "body": "Executor 调用 /executor/tasks/{task_id}/result。"
+        }
+      ],
+      "takeaway": "任务状态从 queued 到 running，再到 completed 或 failed，全程可追踪。"
+    },
+    {
+      "type": "content",
+      "variant": "cards-2",
+      "title": "Git 与环境检测",
+      "subtitle": "看清项目在每台服务器上的真实状态",
+      "assets": {
+        "icons": ["fa6:FaCodeBranch", "fa6:FaDocker"]
+      },
+      "cards": [
+        {
+          "title": "Git 检测",
+          "body": "分支、remote、ahead/behind、未提交改动、最近提交，以及是否为 Git 仓库。",
+          "accent": "accent_primary"
+        },
+        {
+          "title": "环境检测",
+          "body": "OS、CPU 架构、Python、Node.js、Docker、CUDA、磁盘占用等运行条件。",
+          "accent": "accent_secondary"
+        }
+      ],
+      "takeaway": "最新检测失败时，前端显示检测任务状态，而不是继续展示旧快照。"
+    },
+    {
+      "type": "content",
+      "variant": "split",
+      "title": "AI 能力",
+      "subtitle": "从分析建议到主动生成执行计划",
+      "bullets": [
+        "环境分析：比较多台服务器环境差异并给出风险。",
+        "Git 分析：接入 eddz smart_git，分析仓库状态和下一步建议。",
+        "配置计划：根据源/目标服务器环境生成配置步骤。",
+        "主动计划：用户输入自然语言需求，AI 生成结构化计划。"
+      ],
+      "highlights": [
+        "AI 只生成计划。",
+        "后端做安全检查。",
+        "用户确认后再入队执行。"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "comparison-2col",
+      "title": "安全执行机制",
+      "subtitle": "避免 AI 直接越权执行",
+      "left": {
+        "title": "风险来源",
+        "body": [
+          "AI 可能生成不合适命令。",
+          "远程机器路径和权限不同。",
+          "多服务器执行需要可追溯。"
+        ]
+      },
+      "right": {
+        "title": "控制方式",
+        "body": [
+          "执行前需要 confirmed=true。",
+          "后端拦截高危命令。",
+          "Executor 限制 allowed-root。",
+          "任务和结果写入 OperationLog。"
+        ]
+      },
+      "verdict": "ProjectPilot 的执行策略是“先计划、再确认、后执行、全留痕”。"
+    },
+    {
+      "type": "content",
+      "variant": "timeline",
+      "title": "演示闭环",
+      "subtitle": "一次完整操作从前端到 Executor 再回到前端",
+      "milestones": [
+        {
+          "label": "前端",
+          "title": "发起需求",
+          "body": "点击检测，或输入 AI 主动需求。"
+        },
+        {
+          "label": "后端",
+          "title": "生成任务",
+          "body": "创建 detect_git、detect_environment 或 run_local_script。"
+        },
+        {
+          "label": "Executor",
+          "title": "执行任务",
+          "body": "目标服务器本机执行并回传 stdout、stderr 和状态。"
+        },
+        {
+          "label": "前端",
+          "title": "展示结果",
+          "body": "刷新状态、任务队列和 Recent Activity。"
+        }
+      ],
+      "takeaway": "演示重点是状态变化：queued -> running -> completed / failed。"
+    },
+    {
+      "type": "content",
+      "variant": "cards-3",
+      "title": "项目创新点",
+      "subtitle": "把项目管理、AI 分析和分布式执行组合成平台能力",
+      "assets": {
+        "icons": ["fa6:FaNetworkWired", "fa6:FaBrain", "fa6:FaClipboardCheck"]
+      },
+      "cards": [
+        {
+          "title": "中央控制",
+          "body": "一个控制台查看多服务器项目状态和执行历史。",
+          "accent": "accent_primary"
+        },
+        {
+          "title": "分布式执行",
+          "body": "Executor 主动拉任务，减少对集中 SSH 管理的依赖。",
+          "accent": "accent_secondary"
+        },
+        {
+          "title": "AI 计划闭环",
+          "body": "AI 从分析走向可审查、可入队、可追踪的执行计划。",
+          "accent": "accent_primary"
+        }
+      ],
+      "takeaway": "亮点不是单个接口，而是“看、分析、调度、执行、追踪”的完整链路。"
+    },
+    {
+      "type": "content",
+      "variant": "split",
+      "title": "当前不足与后续优化",
+      "subtitle": "核心链路已经跑通，后续重点是工程化和体验增强",
+      "bullets": [
+        "继续统一前后端字段口径，减少展示歧义。",
+        "补充 Executor 在线心跳和任务超时机制。",
+        "增加任务取消、重试、优先级和权限分级。",
+        "增强 AI Planner 的需求分类和多步骤工作流能力。"
+      ],
+      "highlights": [
+        "更强的在线状态面板。",
+        "更完整的任务生命周期。",
+        "更清晰的前端可视化。"
+      ]
+    },
+    {
+      "type": "content",
+      "variant": "stats",
+      "title": "总结",
+      "subtitle": "一个能看、能分析、能调度、能执行的项目管理平台",
+      "facts": [
+        {
+          "value": "1",
+          "label": "中央控制台"
+        },
+        {
+          "value": "N",
+          "label": "多服务器 Executor"
+        },
+        {
+          "value": "4",
+          "label": "AI 与检测能力"
+        },
+        {
+          "value": "全程",
+          "label": "日志追踪"
+        }
+      ],
+      "bullets": [
+        "前端负责统一展示和用户操作。",
+        "后端负责数据管理、AI 分析和任务调度。",
+        "Executor 负责在各服务器本机执行任务并回传结果。"
+      ],
+      "takeaway": "ProjectPilot 将多服务器项目管理从人工排查推进到可视化、可审计、可执行的协作平台。"
+    }
+  ]
+}

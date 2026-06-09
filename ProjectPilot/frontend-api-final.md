@@ -679,15 +679,41 @@ GET /projects/{project_id}/status
         "behind": 0,
         "has_uncommitted_changes": true
       },
+      "latest_git_detection": {
+        "id": "task_detect_git_xxx",
+        "task_type": "detect_git",
+        "status": "completed",
+        "executor_id": "server-a",
+        "error_type": null,
+        "message": null
+      },
       "latest_environment_snapshot": {
         "os": "Linux",
         "python_version": "3.11.8",
         "docker_running": true
+      },
+      "latest_environment_detection": {
+        "id": "task_detect_env_xxx",
+        "task_type": "detect_environment",
+        "status": "completed",
+        "executor_id": "server-a",
+        "error_type": null,
+        "message": null
       }
     }
   ]
 }
 ```
+
+补充说明：
+
+- `latest_git_status` / `latest_environment_snapshot` 表示当前可用的最新成功快照。
+- `latest_git_detection` / `latest_environment_detection` 表示最近一次检测任务本身的状态。
+- 如果最近一次 `detect_git` 任务失败，而且它比旧的 Git 快照更新，后端会返回：
+  - `latest_git_status = null`
+  - `latest_git_detection.status = failed`
+  - `latest_git_detection.message = 失败原因`
+- 前端此时应优先展示检测失败或“检测中”状态，不要再回退显示旧 Git 快照。
 
 ### 2. 获取服务器综合状态
 
@@ -714,11 +740,34 @@ GET /servers/{server_id}/status
       "project_name": "ProjectPilot",
       "project_path": "/opt/projectpilot",
       "latest_git_status": {},
-      "latest_environment_snapshot": {}
+      "latest_git_detection": {
+        "id": "task_detect_git_xxx",
+        "task_type": "detect_git",
+        "status": "failed",
+        "error_type": "not_git_repository",
+        "message": "The target path is not a Git repository."
+      },
+      "latest_environment_snapshot": {},
+      "latest_environment_detection": {
+        "id": "task_detect_env_xxx",
+        "task_type": "detect_environment",
+        "status": "completed"
+      }
     }
   ]
 }
 ```
+
+前端展示建议：
+
+- 优先使用 `latest_git_status` 和 `latest_environment_snapshot` 展示成功快照。
+- 当它们为 `null` 时，读取对应的 `latest_*_detection`。
+- `latest_*_detection.status` 可能是：
+  - `queued`
+  - `running`
+  - `completed`
+  - `failed`
+- 不要再用假兜底补成 `ssh`、`unknown`、`/demo/projectpilot`、模拟执行结果等演示数据。
 
 ## 九、AI 分析接口
 
@@ -811,6 +860,98 @@ POST /projects/{project_id}/ai/config-plan
     "source_environment_snapshot": {},
     "target_environment_snapshot": {}
   }
+}
+```
+
+### 3. AI 主动任务规划与执行
+
+```http
+POST /projects/{project_id}/ai/plan-action
+```
+
+用途：
+
+- 前端传入自然语言需求
+- 后端结合项目、目标服务器、环境快照、Git 状态生成结构化计划
+- 可只返回预览，也可在确认后直接转成 executor 任务
+
+请求体：
+
+```json
+{
+  "goal": "帮我检查 server-b 上这个项目当前状态，并在安全前提下尝试同步代码",
+  "target_server_id": 2,
+  "source_server_id": 1,
+  "allow_command_generation": true,
+  "auto_execute": false,
+  "confirmed": false
+}
+```
+
+字段说明：
+
+- `goal`：用户在前端输入的自然语言需求
+- `target_server_id`：目标服务器
+- `source_server_id`：可选，作为参考环境/参考仓库
+- `allow_command_generation`：是否允许 AI 生成命令
+- `auto_execute`：是否直接进入执行阶段
+- `confirmed`：只有当 `auto_execute=true` 且用户确认后才应传 `true`
+
+预览模式响应示例：
+
+```json
+{
+  "project_id": 1,
+  "project_name": "ProjectPilot",
+  "goal": "帮我检查 server-b 上这个项目当前状态，并在安全前提下尝试同步代码",
+  "status": "preview",
+  "message": "AI action plan generated. Review before execution.",
+  "target_server": {
+    "id": 2,
+    "name": "server-b",
+    "connection_mode": "executor",
+    "project_path": "/home/hzy/project/web"
+  },
+  "plan": {
+    "plan_type": "action_plan",
+    "status": "preview",
+    "risk_level": "medium",
+    "steps": [
+      {
+        "order": 1,
+        "title": "确认仓库状态",
+        "command": "git status --short --branch",
+        "risk_level": "low"
+      },
+      {
+        "order": 2,
+        "title": "尝试安全拉取",
+        "command": "git pull --ff-only",
+        "risk_level": "medium"
+      }
+    ]
+  }
+}
+```
+
+当 `auto_execute=true` 且目标服务器为 `executor` 时，响应会变成异步入队：
+
+```json
+{
+  "project_id": 1,
+  "project_name": "ProjectPilot",
+  "goal": "帮我检查 server-b 上这个项目当前状态，并在安全前提下尝试同步代码",
+  "status": "queued",
+  "message": "AI action plan queued for executor execution.",
+  "tasks": [
+    {
+      "id": "task_xxx",
+      "task_type": "run_local_script",
+      "status": "queued",
+      "executor_id": "server-b"
+    }
+  ],
+  "safety_report": []
 }
 ```
 
@@ -1068,6 +1209,9 @@ GET /servers/{server_id}/operation-logs
 - `POST /projects/{project_id}/ai/config-plan`
   用途：根据源/目标服务器环境生成配置计划
 
+- `POST /projects/{project_id}/ai/plan-action`
+  用途：根据自然语言需求生成主动执行计划，并可在确认后直接转为 executor 任务
+
 - `POST /projects/{project_id}/ai/analyze-git`
   用途：调用 eddz 的 smart_git 能力，对仓库做状态、doctor、map、sync_plan、commit_plan 等分析
 
@@ -1098,6 +1242,7 @@ GET /servers/{server_id}/operation-logs
 - POST /projects/{project_id}/ai/analyze-env
 - POST /projects/{project_id}/ai/analyze-git
 - POST /projects/{project_id}/ai/config-plan
+- POST /projects/{project_id}/ai/plan-action
 - POST /reports/project
 
 ### 服务器列表页

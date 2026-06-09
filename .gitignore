@@ -6,6 +6,12 @@ __pycache__/
 .build/
 .coverage
 htmlcov/
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
 dist/
 build/
 *.egg-info/
@@ -15,3 +21,5 @@ target/
 .projectpilot/reports/
 .projectpilot/audit/
 .DS_Store
+__MACOSX/
+*:Zone.Identifier

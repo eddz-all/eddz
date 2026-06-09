@@ -53,6 +53,15 @@ class SmartGitAnalyzeRequest(BaseModel):
     analyses: list[str] | None = None
 
 
+class AIActionPlanRequest(BaseModel):
+    goal: str
+    target_server_id: int
+    source_server_id: int | None = None
+    allow_command_generation: bool = True
+    auto_execute: bool = False
+    confirmed: bool = False
+
+
 class ProjectReportRequest(BaseModel):
     project_id: int
     include_ai_analysis: bool = True

@@ -1,0 +1,1379 @@
+{
+  "file": "/home/huancheng/AutoEnv/ProjectPilot/ppt/ProjectPilot.pptx",
+  "slide_count": 15,
+  "slides": [
+    {
+      "index": 1,
+      "title": "",
+      "body": [
+        {
+          "text": "ProjectPilot",
+          "level": 0
+        },
+        {
+          "text": "面向多服务器项目环境管理的",
+          "level": 0
+        },
+        {
+          "text": "中央控制平台",
+          "level": 0
+        },
+        {
+          "text": "统一管理项目状态、环境检测、AI 分析与 Executor 异步执行",
+          "level": 0
+        },
+        {
+          "text": "项目名称",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot",
+          "level": 0
+        },
+        {
+          "text": "汇报人",
+          "level": 0
+        },
+        {
+          "text": "待填写",
+          "level": 0
+        },
+        {
+          "text": "小组成员",
+          "level": 0
+        },
+        {
+          "text": "待填写",
+          "level": 0
+        },
+        {
+          "text": "日期",
+          "level": 0
+        },
+        {
+          "text": "待填写",
+          "level": 0
+        },
+        {
+          "text": "前端",
+          "level": 0
+        },
+        {
+          "text": "控制台",
+          "level": 0
+        },
+        {
+          "text": "总后端",
+          "level": 0
+        },
+        {
+          "text": "调度 / 记录",
+          "level": 0
+        },
+        {
+          "text": "数据库",
+          "level": 0
+        },
+        {
+          "text": "Executor",
+          "level": 0
+        },
+        {
+          "text": "服务器 A / B / C",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 1/15",
+          "level": 0
+        },
+        {
+          "text": "1",
+          "level": 0
+        }
+      ],
+      "notes": "封面：说明 ProjectPilot 的定位是多服务器项目环境管理的中央控制平台，核心能力包括状态统一查看、环境检测、AI 分析和 Executor 异步执行。"
+    },
+    {
+      "index": 2,
+      "title": "",
+      "body": [
+        {
+          "text": "为什么需要 ProjectPilot",
+          "level": 0
+        },
+        {
+          "text": "项目背景与痛点",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 2/15",
+          "level": 0
+        },
+        {
+          "text": "• 多人协作时，项目分布在多台服务器上",
+          "level": 0
+        },
+        {
+          "text": "• Git 状态、Python / Node / Docker 环境不一致",
+          "level": 0
+        },
+        {
+          "text": "• 批量 SSH 登录执行命令存在安全风险",
+          "level": 0
+        },
+        {
+          "text": "• 操作过程缺少统一记录，问题难追踪",
+          "level": 0
+        },
+        {
+          "text": "• 人工排查成本高，容易遗漏环境差异和 Git 风险",
+          "level": 0
+        },
+        {
+          "text": "用户",
+          "level": 0
+        },
+        {
+          "text": "server-a",
+          "level": 0
+        },
+        {
+          "text": "main 分支",
+          "level": 0
+        },
+        {
+          "text": "Docker OK",
+          "level": 0
+        },
+        {
+          "text": "状态不同",
+          "level": 0
+        },
+        {
+          "text": "server-b",
+          "level": 0
+        },
+        {
+          "text": "dev 分支",
+          "level": 0
+        },
+        {
+          "text": "Python 版本低",
+          "level": 0
+        },
+        {
+          "text": "状态不同",
+          "level": 0
+        },
+        {
+          "text": "server-c",
+          "level": 0
+        },
+        {
+          "text": "有未提交改动",
+          "level": 0
+        },
+        {
+          "text": "Docker 未运行",
+          "level": 0
+        },
+        {
+          "text": "状态不同",
+          "level": 0
+        },
+        {
+          "text": "核心问题：多服务器项目状态看不清、执行不安全、过程不可追踪。",
+          "level": 0
+        },
+        {
+          "text": "2",
+          "level": 0
+        }
+      ],
+      "notes": "强调本项目不是单纯做页面，而是解决多服务器项目状态分散、安全执行边界不清、过程不可追踪的问题。"
+    },
+    {
+      "index": 3,
+      "title": "",
+      "body": [
+        {
+          "text": "统一查看、分析、调度与执行",
+          "level": 0
+        },
+        {
+          "text": "项目目标",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 3/15",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot 的定位是中央控制台：总后端负责调度与记录，Executor 负责在各服务器本机执行。",
+          "level": 0
+        },
+        {
+          "text": "项目管理",
+          "level": 0
+        },
+        {
+          "text": "01",
+          "level": 0
+        },
+        {
+          "text": "服务器管理",
+          "level": 0
+        },
+        {
+          "text": "02",
+          "level": 0
+        },
+        {
+          "text": "状态检测",
+          "level": 0
+        },
+        {
+          "text": "03",
+          "level": 0
+        },
+        {
+          "text": "AI 分析",
+          "level": 0
+        },
+        {
+          "text": "04",
+          "level": 0
+        },
+        {
+          "text": "Executor",
+          "level": 0
+        },
+        {
+          "text": "执行",
+          "level": 0
+        },
+        {
+          "text": "05",
+          "level": 0
+        },
+        {
+          "text": "• 统一管理项目、服务器及绑定关系",
+          "level": 0
+        },
+        {
+          "text": "• 统一检测 Git 状态和运行环境",
+          "level": 0
+        },
+        {
+          "text": "• 聚合多服务器状态并展示差异",
+          "level": 0
+        },
+        {
+          "text": "• 借助 AI 分析风险并生成配置计划",
+          "level": 0
+        },
+        {
+          "text": "• 通过 Executor 模式受控执行任务",
+          "level": 0
+        },
+        {
+          "text": "• 全流程记录任务状态和操作日志",
+          "level": 0
+        },
+        {
+          "text": "全流程留痕：状态快照 · 任务生命周期 · 操作日志",
+          "level": 0
+        },
+        {
+          "text": "queued / running / completed / failed",
+          "level": 0
+        },
+        {
+          "text": "3",
+          "level": 0
+        }
+      ],
+      "notes": "本页概括目标：统一管理、统一检测、统一展示、AI 辅助分析、Executor 执行、任务和日志追踪。"
+    },
+    {
+      "index": 4,
+      "title": "",
+      "body": [
+        {
+          "text": "中央控制 + 分布式执行",
+          "level": 0
+        },
+        {
+          "text": "总体架构",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 4/15",
+          "level": 0
+        },
+        {
+          "text": "用户",
+          "level": 0
+        },
+        {
+          "text": "前端控制台",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot",
+          "level": 0
+        },
+        {
+          "text": "总后端",
+          "level": 0
+        },
+        {
+          "text": "数据库",
+          "level": 0
+        },
+        {
+          "text": "HTTP API",
+          "level": 0
+        },
+        {
+          "text": "Executor A",
+          "level": 0
+        },
+        {
+          "text": "本机 Git / 环境",
+          "level": 0
+        },
+        {
+          "text": "命令执行",
+          "level": 0
+        },
+        {
+          "text": "Executor B",
+          "level": 0
+        },
+        {
+          "text": "本机 Git / 环境",
+          "level": 0
+        },
+        {
+          "text": "命令执行",
+          "level": 0
+        },
+        {
+          "text": "Executor C",
+          "level": 0
+        },
+        {
+          "text": "本机 Git / 环境",
+          "level": 0
+        },
+        {
+          "text": "命令执行",
+          "level": 0
+        },
+        {
+          "text": "HTTPS 轮询 / 回传",
+          "level": 0
+        },
+        {
+          "text": "安全边界更清楚：前端不直接连接服务器；Executor 主动访问总后端，后端统一创建任务、保存结果、记录日志。",
+          "level": 0
+        },
+        {
+          "text": "4",
+          "level": 0
+        }
+      ],
+      "notes": "核心架构：前端只连总后端，Executor 只连总后端，总后端负责数据库、任务调度和记录。强调不依赖后端批量 SSH 登录。"
+    },
+    {
+      "index": 5,
+      "title": "",
+      "body": [
+        {
+          "text": "前端控制台：统一展示状态",
+          "level": 0
+        },
+        {
+          "text": "前端成果展示",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 5/15",
+          "level": 0
+        },
+        {
+          "text": "前端页面截图占位",
+          "level": 0
+        },
+        {
+          "text": "待补充：项目总览 / 仪表盘指标 / 服务器状态列表",
+          "level": 0
+        },
+        {
+          "text": "• 项目总览与仪表盘指标",
+          "level": 0
+        },
+        {
+          "text": "• 多服务器状态对比列表",
+          "level": 0
+        },
+        {
+          "text": "• Git 与环境矩阵展示",
+          "level": 0
+        },
+        {
+          "text": "• Git 风险和环境问题提示",
+          "level": 0
+        },
+        {
+          "text": "• AI Insight 与计划结果展示",
+          "level": 0
+        },
+        {
+          "text": "• Recent Activity / 任务日志展示",
+          "level": 0
+        },
+        {
+          "text": "任务状态：queued / running / completed / failed",
+          "level": 0
+        },
+        {
+          "text": "前端是用户的中央控制台，负责把后端聚合后的项目、服务器、任务和 AI 结果可视化。",
+          "level": 0
+        },
+        {
+          "text": "5",
+          "level": 0
+        }
+      ],
+      "notes": "前端截图页先保留占位。后续可补充项目总览、服务器列表、Git/环境矩阵、AI Insight 和 Recent Activity。"
+    },
+    {
+      "index": 6,
+      "title": "",
+      "body": [
+        {
+          "text": "后端：调度中心 + 数据中心",
+          "level": 0
+        },
+        {
+          "text": "后端设计",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 6/15",
+          "level": 0
+        },
+        {
+          "text": "Routers",
+          "level": 0
+        },
+        {
+          "text": "API 接收请求",
+          "level": 0
+        },
+        {
+          "text": "Services",
+          "level": 0
+        },
+        {
+          "text": "业务编排 / 调用底层能力",
+          "level": 0
+        },
+        {
+          "text": "Models / Database",
+          "level": 0
+        },
+        {
+          "text": "数据结构 / 持久化",
+          "level": 0
+        },
+        {
+          "text": "• FastAPI 提供统一 REST API",
+          "level": 0
+        },
+        {
+          "text": "• SQLite + SQLAlchemy 保存项目、服务器、绑定关系、快照、任务和日志",
+          "level": 0
+        },
+        {
+          "text": "• Service 层负责任务编排，不把业务逻辑写在前端",
+          "level": 0
+        },
+        {
+          "text": "• 统一处理检测任务创建、AI 分析、Executor 分发和结果入库",
+          "level": 0
+        },
+        {
+          "text": "• OperationLog 记录关键操作，ExecutorTask 记录异步任务生命周期",
+          "level": 0
+        },
+        {
+          "text": "项目管理",
+          "level": 0
+        },
+        {
+          "text": "服务器管理",
+          "level": 0
+        },
+        {
+          "text": "绑定关系",
+          "level": 0
+        },
+        {
+          "text": "AI 分析",
+          "level": 0
+        },
+        {
+          "text": "任务分发",
+          "level": 0
+        },
+        {
+          "text": "日志追踪",
+          "level": 0
+        },
+        {
+          "text": "后端是项目的“大脑”：统一决策、调度和留痕，不只是接口转发。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "讲后端的三层结构和核心职责：API 接收、Service 编排、Model 持久化。强调 OperationLog 和 ExecutorTask 的意义。"
+    },
+    {
+      "index": 7,
+      "title": "",
+      "body": [
+        {
+          "text": "项目、服务器、快照、任务与日志",
+          "level": 0
+        },
+        {
+          "text": "数据库与核心数据模型",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 7/15",
+          "level": 0
+        },
+        {
+          "text": "Project",
+          "level": 0
+        },
+        {
+          "text": "项目基本信息",
+          "level": 0
+        },
+        {
+          "text": "ProjectServerMapping",
+          "level": 0
+        },
+        {
+          "text": "project_path",
+          "level": 0
+        },
+        {
+          "text": "Server",
+          "level": 0
+        },
+        {
+          "text": "connection_mode",
+          "level": 0
+        },
+        {
+          "text": "1---N",
+          "level": 0
+        },
+        {
+          "text": "N---1",
+          "level": 0
+        },
+        {
+          "text": "GitStatus",
+          "level": 0
+        },
+        {
+          "text": "EnvironmentSnapshot",
+          "level": 0
+        },
+        {
+          "text": "ExecutorTask",
+          "level": 0
+        },
+        {
+          "text": "OperationLog",
+          "level": 0
+        },
+        {
+          "text": "Project 1---N 状态快照 / 异步任务 / 操作日志",
+          "level": 0
+        },
+        {
+          "text": "• 项目与服务器是多对多关系",
+          "level": 0
+        },
+        {
+          "text": "• Mapping 保存目标服务器路径",
+          "level": 0
+        },
+        {
+          "text": "• Git / 环境快照挂到项目",
+          "level": 0
+        },
+        {
+          "text": "• Task / Log 追踪执行过程",
+          "level": 0
+        },
+        {
+          "text": "Project 1---N Mapping N---1 Server",
+          "level": 0
+        },
+        {
+          "text": "核心模型将“项目在哪台服务器的哪个路径上”显式建模，后续检测、AI 分析和执行任务都基于该绑定关系。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "解释 Project、Server、ProjectServerMapping 之间的多对多关系，以及 GitStatus、EnvironmentSnapshot、ExecutorTask、OperationLog 如何围绕 Project 保存。"
+    },
+    {
+      "index": 8,
+      "title": "",
+      "body": [
+        {
+          "text": "Executor：服务器主动拉取任务",
+          "level": 0
+        },
+        {
+          "text": "分布式执行模式",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 8/15",
+          "level": 0
+        },
+        {
+          "text": "点击检测",
+          "level": 0
+        },
+        {
+          "text": "POST /executor/poll",
+          "level": 0
+        },
+        {
+          "text": "本机执行",
+          "level": 0
+        },
+        {
+          "text": "POST /executor/tasks/{task_id}/result",
+          "level": 0
+        },
+        {
+          "text": "更新状态并写日志",
+          "level": 0
+        },
+        {
+          "text": "前端",
+          "level": 0
+        },
+        {
+          "text": "总后端",
+          "level": 0
+        },
+        {
+          "text": "Executor",
+          "level": 0
+        },
+        {
+          "text": "本机项目",
+          "level": 0
+        },
+        {
+          "text": "状态 / 日志",
+          "level": 0
+        },
+        {
+          "text": "queued",
+          "level": 0
+        },
+        {
+          "text": "running",
+          "level": 0
+        },
+        {
+          "text": "completed",
+          "level": 0
+        },
+        {
+          "text": "failed",
+          "level": 0
+        },
+        {
+          "text": "• 不需要后端主动 SSH 到每台服务器",
+          "level": 0
+        },
+        {
+          "text": "• 目标服务器只需能访问总后端 HTTPS 地址",
+          "level": 0
+        },
+        {
+          "text": "• 支持异步任务状态展示",
+          "level": 0
+        },
+        {
+          "text": "• 任务和执行结果全程可追踪",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "讲 Executor 模式的核心：服务器主动 poll，拿到任务后本机执行，再把结果回传。状态流转为 queued、running、completed 或 failed。"
+    },
+    {
+      "index": 9,
+      "title": "",
+      "body": [
+        {
+          "text": "看清每台服务器的真实状态",
+          "level": 0
+        },
+        {
+          "text": "Git 与环境检测能力",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 9/15",
+          "level": 0
+        },
+        {
+          "text": "Git 检测",
+          "level": 0
+        },
+        {
+          "text": "• 当前分支与 remote 信息",
+          "level": 0
+        },
+        {
+          "text": "• ahead / behind 情况",
+          "level": 0
+        },
+        {
+          "text": "• 是否有未提交改动",
+          "level": 0
+        },
+        {
+          "text": "• 最近提交信息",
+          "level": 0
+        },
+        {
+          "text": "• 是否为 Git 仓库",
+          "level": 0
+        },
+        {
+          "text": "• 风险和同步状态判断",
+          "level": 0
+        },
+        {
+          "text": "环境检测",
+          "level": 0
+        },
+        {
+          "text": "• 操作系统与 CPU 架构",
+          "level": 0
+        },
+        {
+          "text": "• Python 版本、Node.js 版本",
+          "level": 0
+        },
+        {
+          "text": "• Docker 是否安装和运行",
+          "level": 0
+        },
+        {
+          "text": "• CUDA 版本",
+          "level": 0
+        },
+        {
+          "text": "• 磁盘占用",
+          "level": 0
+        },
+        {
+          "text": "• 运行环境差异对比",
+          "level": 0
+        },
+        {
+          "text": "重要改进：综合状态接口返回最新成功快照；如果最新检测失败，不再用旧 Git 快照误导前端。",
+          "level": 0
+        },
+        {
+          "text": "latest_git_detection   latest_environment_detection",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "强调系统不仅展示历史成功结果，也关注最近一次检测是否失败，避免前端展示过期或误导状态。"
+    },
+    {
+      "index": 10,
+      "title": "",
+      "body": [
+        {
+          "text": "AI：从分析建议到主动计划",
+          "level": 0
+        },
+        {
+          "text": "AI 能力",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 10/15",
+          "level": 0
+        },
+        {
+          "text": "用户需求",
+          "level": 0
+        },
+        {
+          "text": "AI 生成计划",
+          "level": 0
+        },
+        {
+          "text": "安全检查",
+          "level": 0
+        },
+        {
+          "text": "人工确认",
+          "level": 0
+        },
+        {
+          "text": "Executor 执行",
+          "level": 0
+        },
+        {
+          "text": "环境分析",
+          "level": 0
+        },
+        {
+          "text": "分析不同服务器环境差异",
+          "level": 0
+        },
+        {
+          "text": "给出风险和建议",
+          "level": 0
+        },
+        {
+          "text": "Git 分析",
+          "level": 0
+        },
+        {
+          "text": "调用 smart_git 能力",
+          "level": 0
+        },
+        {
+          "text": "doctor / map / sync plan / commit plan",
+          "level": 0
+        },
+        {
+          "text": "配置计划生成",
+          "level": 0
+        },
+        {
+          "text": "根据源服务器与目标服务器",
+          "level": 0
+        },
+        {
+          "text": "生成配置步骤",
+          "level": 0
+        },
+        {
+          "text": "主动任务规划",
+          "level": 0
+        },
+        {
+          "text": "自然语言需求 → 结构化计划",
+          "level": 0
+        },
+        {
+          "text": "确认后转 Executor 队列",
+          "level": 0
+        },
+        {
+          "text": "POST /projects/{project_id}/ai/plan-action",
+          "level": 0
+        },
+        {
+          "text": "关键边界：AI 不直接绕过人执行命令；先生成计划，经过安全检查和人工确认后才进入执行队列。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "讲 AI 能力从建议发展到计划：环境分析、Git 分析、配置计划、主动任务规划。强调 AI 不直接执行命令。"
+    },
+    {
+      "index": 11,
+      "title": "",
+      "body": [
+        {
+          "text": "AI 生成，人工确认，后端拦截",
+          "level": 0
+        },
+        {
+          "text": "安全执行与日志追踪",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 11/15",
+          "level": 0
+        },
+        {
+          "text": "AI 计划",
+          "level": 0
+        },
+        {
+          "text": "用户确认",
+          "level": 0
+        },
+        {
+          "text": "安全检查",
+          "level": 0
+        },
+        {
+          "text": "Executor",
+          "level": 0
+        },
+        {
+          "text": "OperationLog",
+          "level": 0
+        },
+        {
+          "text": "危险命令",
+          "level": 0
+        },
+        {
+          "text": "阻断",
+          "level": 0
+        },
+        {
+          "text": "• 执行前必须由用户确认",
+          "level": 0
+        },
+        {
+          "text": "• 后端对命令做安全检查，危险命令被阻断",
+          "level": 0
+        },
+        {
+          "text": "• 前端不直接操作服务器，AI 不直接执行命令",
+          "level": 0
+        },
+        {
+          "text": "• Executor 只执行分配给自己的任务",
+          "level": 0
+        },
+        {
+          "text": "• Executor 限制 allowed-root，只访问允许目录",
+          "level": 0
+        },
+        {
+          "text": "• 任务输入、执行结果和错误信息写入日志",
+          "level": 0
+        },
+        {
+          "text": "queued",
+          "level": 0
+        },
+        {
+          "text": "running",
+          "level": 0
+        },
+        {
+          "text": "completed",
+          "level": 0
+        },
+        {
+          "text": "failed",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot 强调“受控自动化”：计划可解释、执行可拦截、结果可追踪。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "讲安全机制：用户确认、后端安全检查、Executor allowed-root、任务状态和 OperationLog。强调这不是黑盒自动执行。"
+    },
+    {
+      "index": 12,
+      "title": "",
+      "body": [
+        {
+          "text": "一次完整的检测与执行闭环",
+          "level": 0
+        },
+        {
+          "text": "实际演示流程",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 12/15",
+          "level": 0
+        },
+        {
+          "text": "1",
+          "level": 0
+        },
+        {
+          "text": "查看项目",
+          "level": 0
+        },
+        {
+          "text": "与服务器",
+          "level": 0
+        },
+        {
+          "text": "2",
+          "level": 0
+        },
+        {
+          "text": "选择目标",
+          "level": 0
+        },
+        {
+          "text": "并点击检测",
+          "level": 0
+        },
+        {
+          "text": "3",
+          "level": 0
+        },
+        {
+          "text": "后端创建",
+          "level": 0
+        },
+        {
+          "text": "detect 任务",
+          "level": 0
+        },
+        {
+          "text": "4",
+          "level": 0
+        },
+        {
+          "text": "Executor",
+          "level": 0
+        },
+        {
+          "text": "拉取执行",
+          "level": 0
+        },
+        {
+          "text": "5",
+          "level": 0
+        },
+        {
+          "text": "回传结果",
+          "level": 0
+        },
+        {
+          "text": "展示状态",
+          "level": 0
+        },
+        {
+          "text": "6",
+          "level": 0
+        },
+        {
+          "text": "AI 计划",
+          "level": 0
+        },
+        {
+          "text": "确认入队",
+          "level": 0
+        },
+        {
+          "text": "截图 1：项目总览",
+          "level": 0
+        },
+        {
+          "text": "待补充",
+          "level": 0
+        },
+        {
+          "text": "截图 2：服务器状态",
+          "level": 0
+        },
+        {
+          "text": "待补充",
+          "level": 0
+        },
+        {
+          "text": "截图 3：任务队列",
+          "level": 0
+        },
+        {
+          "text": "待补充",
+          "level": 0
+        },
+        {
+          "text": "截图 4：AI 计划结果",
+          "level": 0
+        },
+        {
+          "text": "待补充",
+          "level": 0
+        },
+        {
+          "text": "POST /projects/{project_id}/servers/{server_id}/detect",
+          "level": 0
+        },
+        {
+          "text": "detect_git + detect_environment → queued → running → completed / failed",
+          "level": 0
+        },
+        {
+          "text": "演示重点：展示状态变化，而不是只展示静态页面。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "建议演示流程：查看项目和服务器、选择 ProjectPilot 与 server-b、点击检测、Executor 拉取任务并回传、展示检测状态和错误信息、输入 AI 需求、确认计划后进入任务队列。"
+    },
+    {
+      "index": 13,
+      "title": "",
+      "body": [
+        {
+          "text": "中央控制、分布式执行、AI 计划与留痕",
+          "level": 0
+        },
+        {
+          "text": "项目创新点",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 13/15",
+          "level": 0
+        },
+        {
+          "text": "统一管理",
+          "level": 0
+        },
+        {
+          "text": "一个界面管理多服务器项目状态",
+          "level": 0
+        },
+        {
+          "text": "分布式执行",
+          "level": 0
+        },
+        {
+          "text": "服务器主动拉任务，不依赖大量 SSH",
+          "level": 0
+        },
+        {
+          "text": "AI 辅助决策",
+          "level": 0
+        },
+        {
+          "text": "自然语言需求生成结构化计划",
+          "level": 0
+        },
+        {
+          "text": "• Git 智能分析：不只是展示 status，而是分析风险和下一步操作",
+          "level": 0
+        },
+        {
+          "text": "• 安全执行：AI 计划经过检查和人工确认后才执行",
+          "level": 0
+        },
+        {
+          "text": "• 全流程留痕：任务状态、检测结果、错误信息和操作日志统一记录",
+          "level": 0
+        },
+        {
+          "text": "创新点不是某个单一功能，而是把“看清状态 → 分析风险 → 生成计划 → 受控执行 → 留痕追踪”串成闭环。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "讲创新点时用闭环来总结：中央控制、Executor 分布式执行、Git 智能分析、AI 主动计划、安全执行和全流程留痕。"
+    },
+    {
+      "index": 14,
+      "title": "",
+      "body": [
+        {
+          "text": "不足与展望",
+          "level": 0
+        },
+        {
+          "text": "当前不足与后续优化",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 14/15",
+          "level": 0
+        },
+        {
+          "text": "当前不足",
+          "level": 0
+        },
+        {
+          "text": "• 前后端接口字段仍需继续保持同步",
+          "level": 0
+        },
+        {
+          "text": "• Executor 在线状态和心跳展示还可增强",
+          "level": 0
+        },
+        {
+          "text": "• 任务取消、重试、优先级仍可扩展",
+          "level": 0
+        },
+        {
+          "text": "• AI Planner 仍是初版，需求分类和多步骤工作流可增强",
+          "level": 0
+        },
+        {
+          "text": "• CORS 与部署目前通过代理 / Tunnel 解决",
+          "level": 0
+        },
+        {
+          "text": "后续优化",
+          "level": 0
+        },
+        {
+          "text": "• Executor 在线状态面板",
+          "level": 0
+        },
+        {
+          "text": "• 任务取消、重试和超时机制",
+          "level": 0
+        },
+        {
+          "text": "• 更细粒度权限控制",
+          "level": 0
+        },
+        {
+          "text": "• 更完整的 AI Planner",
+          "level": 0
+        },
+        {
+          "text": "• 多项目、多服务器对比报告",
+          "level": 0
+        },
+        {
+          "text": "• 更完善的前端交互和可视化",
+          "level": 0
+        },
+        {
+          "text": "稳定性",
+          "level": 0
+        },
+        {
+          "text": "可视化",
+          "level": 0
+        },
+        {
+          "text": "权限控制",
+          "level": 0
+        },
+        {
+          "text": "工程化部署",
+          "level": 0
+        },
+        {
+          "text": "核心闭环已经跑通，后续重点是增强稳定性、可视化和工程化能力。",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "讲不足时不要只说问题，要强调核心闭环已经跑通，后续优化集中在稳定性、可视化、权限控制和工程化部署。"
+    },
+    {
+      "index": 15,
+      "title": "",
+      "body": [
+        {
+          "text": "总结",
+          "level": 0
+        },
+        {
+          "text": "Q&A",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot · 15/15",
+          "level": 0
+        },
+        {
+          "text": "一个能看、能分析、能调度、能执行的项目管理平台",
+          "level": 0
+        },
+        {
+          "text": "ProjectPilot 将多服务器项目环境检测、Git 状态识别、配置计划生成和任务执行串成完整闭环。",
+          "level": 0
+        },
+        {
+          "text": "前端",
+          "level": 0
+        },
+        {
+          "text": "统一展示和用户操作",
+          "level": 0
+        },
+        {
+          "text": "后端",
+          "level": 0
+        },
+        {
+          "text": "数据管理、AI 分析和任务调度",
+          "level": 0
+        },
+        {
+          "text": "Executor",
+          "level": 0
+        },
+        {
+          "text": "本机执行任务并回传结果",
+          "level": 0
+        },
+        {
+          "text": "谢谢观看 / Q&A",
+          "level": 0
+        },
+        {
+          "text": "<number>",
+          "level": 0
+        }
+      ],
+      "notes": "总结三句话：前端负责展示和操作，后端负责数据管理、AI 分析和任务调度，Executor 负责在各服务器本机执行任务并回传结果。"
+    }
+  ]
+}

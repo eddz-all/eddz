@@ -74,6 +74,7 @@ def get_project_servers(project_id: int, db: Session = Depends(get_db)):
             "host": server.host,
             "port": server.port,
             "username": server.username,
+            "connection_mode": server.connection_mode,
             "project_path": binding.project_path,
             "created_at": binding.created_at,
         }
@@ -122,6 +123,11 @@ def get_server_projects(server_id: int, db: Session = Depends(get_db)):
         {
             "binding_id": binding.id,
             "server_id": binding.server_id,
+            "server_name": server.name,
+            "host": server.host,
+            "port": server.port,
+            "username": server.username,
+            "connection_mode": server.connection_mode,
             "project_id": project.id,
             "project_name": project.name,
             "project_path": binding.project_path,

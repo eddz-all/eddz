@@ -1,0 +1,181 @@
+{
+  "input": "/home/huancheng/AutoEnv/ProjectPilot/ppt/ProjectPilot_Report.pptx",
+  "outdir": "/home/huancheng/AutoEnv/ProjectPilot/ppt/qa",
+  "style_preset": "arctic-minimal",
+  "max_loops": 1,
+  "overflow_count": 0,
+  "overlap_count": 0,
+  "placeholder_hits": [],
+  "issue_slide_count": 0,
+  "issue_shape_count": 0,
+  "geometry_violations": [
+    {
+      "type": "empty_ratio_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.0255,
+      "suggested_fix": "Increase purposeful visual structure to reduce dead zones.",
+      "slide_type": "content",
+      "effective_max_empty_ratio": 0.58,
+      "slide_index": 0
+    },
+    {
+      "type": "density_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.0789,
+      "suggested_fix": "Reduce number/size of blocks or split content across slides.",
+      "slide_type": "content",
+      "visual_density_score": 0.8789,
+      "slide_index": 2
+    },
+    {
+      "type": "density_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.1049,
+      "suggested_fix": "Reduce number/size of blocks or split content across slides.",
+      "slide_type": "content",
+      "visual_density_score": 0.9049,
+      "slide_index": 3
+    },
+    {
+      "type": "empty_ratio_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.056,
+      "suggested_fix": "Increase purposeful visual structure to reduce dead zones.",
+      "slide_type": "content",
+      "effective_max_empty_ratio": 0.58,
+      "slide_index": 5
+    },
+    {
+      "type": "density_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.1049,
+      "suggested_fix": "Reduce number/size of blocks or split content across slides.",
+      "slide_type": "content",
+      "visual_density_score": 0.9049,
+      "slide_index": 7
+    },
+    {
+      "type": "density_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.1049,
+      "suggested_fix": "Reduce number/size of blocks or split content across slides.",
+      "slide_type": "content",
+      "visual_density_score": 0.9049,
+      "slide_index": 11
+    },
+    {
+      "type": "density_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.0789,
+      "suggested_fix": "Reduce number/size of blocks or split content across slides.",
+      "slide_type": "content",
+      "visual_density_score": 0.8789,
+      "slide_index": 12
+    },
+    {
+      "type": "density_too_high",
+      "shape_ids": [],
+      "severity": "warning",
+      "delta_inches": 0.1039,
+      "suggested_fix": "Reduce number/size of blocks or split content across slides.",
+      "slide_type": "content",
+      "visual_density_score": 0.9039,
+      "slide_index": 14
+    }
+  ],
+  "geometry_error_count": 0,
+  "geometry_warning_count": 8,
+  "visual_warning_count": 0,
+  "visual_info_count": 0,
+  "visual_report": "/home/huancheng/AutoEnv/ProjectPilot/ppt/qa/visual_qa.json",
+  "visual_rc": 0,
+  "render_rc": 0,
+  "render_stdout_tail": "",
+  "rendered_slide_count": 0,
+  "expected_slide_count": 15,
+  "visual_review_warning_count": 0,
+  "visual_review_info_count": 0,
+  "visual_review_report": "",
+  "visual_review_markdown": "",
+  "visual_review_contact_sheet": "",
+  "visual_review_rc": 0,
+  "visual_review_stdout_tail": "",
+  "design_error_count": 0,
+  "design_warning_count": 0,
+  "design_report": "/home/huancheng/AutoEnv/ProjectPilot/ppt/qa/design_rules.json",
+  "design_rc": 0,
+  "density_score_by_slide": [
+    {
+      "slide_index": 0,
+      "density_score": 0.3945
+    },
+    {
+      "slide_index": 1,
+      "density_score": 0.6811
+    },
+    {
+      "slide_index": 2,
+      "density_score": 0.8789
+    },
+    {
+      "slide_index": 3,
+      "density_score": 0.9049
+    },
+    {
+      "slide_index": 4,
+      "density_score": 0.4985
+    },
+    {
+      "slide_index": 5,
+      "density_score": 0.364
+    },
+    {
+      "slide_index": 6,
+      "density_score": 0.6578
+    },
+    {
+      "slide_index": 7,
+      "density_score": 0.9049
+    },
+    {
+      "slide_index": 8,
+      "density_score": 0.7296
+    },
+    {
+      "slide_index": 9,
+      "density_score": 0.6811
+    },
+    {
+      "slide_index": 10,
+      "density_score": 0.6096
+    },
+    {
+      "slide_index": 11,
+      "density_score": 0.9049
+    },
+    {
+      "slide_index": 12,
+      "density_score": 0.8789
+    },
+    {
+      "slide_index": 13,
+      "density_score": 0.6811
+    },
+    {
+      "slide_index": 14,
+      "density_score": 0.9039
+    }
+  ],
+  "font_families": [
+    "Helvetica Neue"
+  ],
+  "manual_review_passed": false,
+  "strict_geometry": false
+}
