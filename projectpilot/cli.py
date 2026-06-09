@@ -24,7 +24,6 @@ from projectpilot.backend_console import (
     run_backend_console,
     trigger_detect,
 )
-from projectpilot.executor.app import run_executor_app
 from projectpilot.executor.backend import (
     ExecutorBackendStore,
     create_executor_backend_server,
@@ -505,17 +504,6 @@ def build_parser() -> argparse.ArgumentParser:
     connect_command.add_argument("--once", action="store_true", help="Poll and process at most one task.")
     connect_command.add_argument("--json", action="store_true", help="Print machine-readable JSON for --once.")
     connect_command.set_defaults(handler=handle_executor_connect)
-
-    app_command = executor_subparsers.add_parser(
-        "app",
-        help="Open the local ProjectPilot Executor app.",
-        description="Open the local ProjectPilot Executor app.",
-    )
-    add_executor_config_argument(app_command)
-    app_command.add_argument("--host", default="127.0.0.1", help="Local app host.")
-    app_command.add_argument("--port", type=int, default=8765, help="Local app port.")
-    app_command.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically.")
-    app_command.set_defaults(handler=handle_executor_app)
 
     ssh_hosts_command = executor_subparsers.add_parser(
         "ssh-hosts",
@@ -1222,16 +1210,6 @@ def handle_executor_server_b(args: argparse.Namespace) -> int:
         timeout=args.timeout,
         json_output=args.json,
     )
-
-
-def handle_executor_app(args: argparse.Namespace) -> int:
-    run_executor_app(
-        host=args.host,
-        port=args.port,
-        config_path=args.config,
-        open_browser=not args.no_browser,
-    )
-    return 0
 
 
 def handle_executor_ssh_hosts(args: argparse.Namespace) -> int:
