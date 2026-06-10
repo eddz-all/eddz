@@ -6,6 +6,7 @@ const LOCAL_API_PROXY_BASE = "/api";
 const SESSION_KEY = "projectpilot.session";
 const LOCAL_DEMO_KEY = "projectpilot.localDemo.v1";
 const MISSING_VALUE = "未返回";
+const REQUEST_TIMEOUT_MS = 8000;
 
 const apiContract = [
   ["GET", "/projects", "已接入", "项目列表"],
@@ -42,6 +43,7 @@ const state = {
   localDemoActive: false,
   isLoading: false,
   toast: "",
+  pendingActions: new Set(),
   drafts: {
     login: {
       email: "admin@projectpilot.local",
@@ -120,6 +122,40 @@ function displayValue(value) {
     return MISSING_VALUE;
   }
   return value;
+}
+
+function isActionPending(actionKey) {
+  return state.pendingActions.has(actionKey);
+}
+
+function actionAttrs(actionKey) {
+  return isActionPending(actionKey) ? 'disabled aria-busy="true"' : "";
+}
+
+function actionText(actionKey, idleText, busyText = "处理中...") {
+  return isActionPending(actionKey) ? busyText : idleText;
+}
+
+async function runAction(actionKey, busyMessage, handler) {
+  if (isActionPending(actionKey)) {
+    return;
+  }
+
+  state.pendingActions.add(actionKey);
+  if (busyMessage) {
+    setToast(busyMessage);
+  }
+  render();
+  try {
+    await handler();
+  } finally {
+    state.pendingActions.delete(actionKey);
+    render();
+  }
+}
+
+function confirmAction(message) {
+  return window.confirm(message);
 }
 
 function shouldProxyApiBase(apiBase) {
@@ -1190,6 +1226,12 @@ async function request(path, options = {}, fallback) {
     method: options.method || "GET",
     headers
   };
+  let timeoutHandle = null;
+  if (typeof AbortController !== "undefined" && !invoke) {
+    const controller = new AbortController();
+    init.signal = controller.signal;
+    timeoutHandle = window.setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS);
+  }
 
   if (options.body) {
     init.body = JSON.stringify(options.body);
@@ -1218,6 +1260,10 @@ async function request(path, options = {}, fallback) {
     state.backendIssue = "";
     state.localDemoActive = false;
     const text = await response.text();
+    if (timeoutHandle) {
+      window.clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
     if (!text) {
       return { ok: true };
     }
@@ -1227,6 +1273,12 @@ async function request(path, options = {}, fallback) {
       return { content: text };
     }
   } catch (error) {
+    if (timeoutHandle) {
+      window.clearTimeout(timeoutHandle);
+    }
+    if (error?.name === "AbortError") {
+      error = new Error(`Request timed out after ${(options.timeoutMs || REQUEST_TIMEOUT_MS) / 1000}s`);
+    }
     const canUseLocalDemo = !error?.httpStatus || error.httpStatus >= 500;
     if (canUseLocalDemo) {
       const localResult = localRequest(path, options);
@@ -1258,11 +1310,12 @@ async function loadData({ silent = false } = {}) {
   state.isLoading = true;
   if (!silent) render();
 
-  const projectsResponse = await request("/projects", {}, null);
+  const [projectsResponse, serversResponse] = await Promise.all([
+    request("/projects", {}, null),
+    request("/servers", {}, null)
+  ]);
   state.dataLoaded.projects = Array.isArray(projectsResponse);
   state.projects = state.dataLoaded.projects ? projectsResponse : [];
-
-  const serversResponse = await request("/servers", {}, null);
   state.dataLoaded.servers = Array.isArray(serversResponse);
   state.servers = state.dataLoaded.servers ? serversResponse : [];
 
@@ -1287,17 +1340,20 @@ async function loadData({ silent = false } = {}) {
     state.selectedServerId = null;
     state.report = "";
   }
-  const statusResponse = projectId ? await request(`/projects/${projectId}/status`, {}, null) : null;
+  const [statusResponse, bindingsResponse, tasksResponse, aiSettingsResponse, activitiesResponse] = await Promise.all([
+    projectId ? request(`/projects/${projectId}/status`, {}, null) : null,
+    projectId ? request(`/projects/${projectId}/servers`, {}, null) : null,
+    request(projectId ? `/executor/tasks?project_id=${projectId}` : "/executor/tasks", { optional: true }, []),
+    request("/ai/settings", { optional: true }, null),
+    request("/operation-logs", {}, [])
+  ]);
   state.dataLoaded.status = Boolean(statusResponse);
   state.status = statusResponse || { project: project || null, servers: [] };
-  const bindingsResponse = projectId ? await request(`/projects/${projectId}/servers`, {}, null) : null;
   state.dataLoaded.bindings = Array.isArray(bindingsResponse);
   state.bindings = state.dataLoaded.bindings ? bindingsResponse : [];
-  state.executorTasks = normalizeTaskList(
-    await request(projectId ? `/executor/tasks?project_id=${projectId}` : "/executor/tasks", { optional: true }, [])
-  );
-  state.aiSettings = await request("/ai/settings", { optional: true }, null);
-  state.activities = await request("/operation-logs", {}, []);
+  state.executorTasks = normalizeTaskList(tasksResponse);
+  state.aiSettings = aiSettingsResponse;
+  state.activities = Array.isArray(activitiesResponse) ? activitiesResponse : [];
   state.lastSync = new Date().toISOString();
   state.isLoading = false;
   render();
@@ -1835,7 +1891,7 @@ function renderTopbar() {
       <div class="top-actions">
         <select data-project-select aria-label="选择项目">${projectOptions}</select>
         <span class="connection ${mode.className}">${mode.label}</span>
-        <button class="icon-button" type="button" data-refresh title="刷新数据">↻</button>
+        <button class="icon-button" type="button" data-refresh title="刷新数据" ${actionAttrs("refresh-data")}>${actionText("refresh-data", "↻", "…")}</button>
         <button class="user-pill" type="button" data-route="settings">
           <span>${escapeHtml(state.user.initials)}</span>
           ${escapeHtml(state.user.name)}
@@ -1858,8 +1914,8 @@ function renderConnectionBanner() {
         <span>${escapeHtml(mode.detail)}</span>
       </div>
       <div class="row-actions">
-        <button type="button" data-use-local-demo>Use Local Demo</button>
-        <button type="button" data-retry-backend>Retry Backend</button>
+        <button type="button" data-use-local-demo ${actionAttrs("use-local-demo")}>${actionText("use-local-demo", "Use Local Demo")}</button>
+        <button type="button" data-retry-backend ${actionAttrs("retry-backend")}>${actionText("retry-backend", "Retry Backend", "Retrying...")}</button>
       </div>
     </section>
   `;
@@ -1926,10 +1982,10 @@ function renderDashboard() {
       <section class="panel wide">
         <div class="panel-header">
           <h3>Server Health Overview</h3>
-          <button type="button" data-detect-project>Run Detection</button>
+          <button type="button" data-detect-project ${actionAttrs("detect-project")}>${actionText("detect-project", "Run Detection", "Queuing...")}</button>
         </div>
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap dashboard-table-wrap">
+          <table class="dashboard-table health-table">
             <thead>
               <tr>
                 <th>Server</th>
@@ -1950,7 +2006,7 @@ function renderDashboard() {
       <section class="panel ai-panel">
         <div class="panel-header">
           <h3>AI Insight</h3>
-          <button type="button" data-generate-ai>Refresh AI</button>
+          <button type="button" data-generate-ai ${actionAttrs("refresh-ai")}>${actionText("refresh-ai", "Refresh AI", "Running...")}</button>
         </div>
         <div class="insight-box">
           <strong>${escapeHtml(projectName)} 当前风险</strong>
@@ -1967,8 +2023,8 @@ function renderDashboard() {
           <h3>Git & Environment Matrix</h3>
           <span>${escapeHtml(pathSummary)}</span>
         </div>
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap dashboard-table-wrap">
+          <table class="dashboard-table matrix-table">
             <thead>
               <tr>
                 <th>Environment</th>
@@ -2187,7 +2243,7 @@ function renderProjects() {
             <span>说明</span>
             <textarea name="description">${escapeHtml(state.drafts.project.description)}</textarea>
           </label>
-          <button type="submit">创建项目</button>
+          <button type="submit" ${actionAttrs("create-project")}>${actionText("create-project", "创建项目", "创建中...")}</button>
         </form>
       </section>
     </div>
@@ -2228,8 +2284,8 @@ function renderServers() {
                         <td><span class="badge ${statusTone}">${escapeHtml(displayValue(server.connection_status))}</span></td>
                         <td>
                           <div class="row-actions">
-                            <button type="button" data-check-server="${server.id}">Check</button>
-                            <button type="button" data-server-detail="${server.id}">Details</button>
+                            <button type="button" data-check-server="${server.id}" ${actionAttrs(`check-server-${server.id}`)}>${actionText(`check-server-${server.id}`, "Check", "Checking...")}</button>
+                            <button type="button" data-server-detail="${server.id}" ${actionAttrs(`server-detail-${server.id}`)}>${actionText(`server-detail-${server.id}`, "Details", "Loading...")}</button>
                           </div>
                         </td>
                       </tr>
@@ -2274,7 +2330,7 @@ function renderServers() {
             <span>说明</span>
             <textarea name="description">${escapeHtml(state.drafts.server.description)}</textarea>
           </label>
-          <button type="submit">创建服务器</button>
+          <button type="submit" ${actionAttrs("create-server")}>${actionText("create-server", "创建服务器", "创建中...")}</button>
         </form>
       </section>
     </div>
@@ -2394,8 +2450,8 @@ function renderBindingRow(binding) {
       <td>${formatTime(binding.created_at)}</td>
       <td>
         <div class="row-actions">
-          <button type="button" data-detect-server="${escapeHtml(binding.server_id)}">Detect</button>
-          <button class="danger-button" type="button" data-unbind-server="${escapeHtml(binding.server_id)}">Unbind</button>
+          <button type="button" data-detect-server="${escapeHtml(binding.server_id)}" ${actionAttrs(`detect-server-${binding.server_id}`)}>${actionText(`detect-server-${binding.server_id}`, "Detect", "Queuing...")}</button>
+          <button class="danger-button" type="button" data-unbind-server="${escapeHtml(binding.server_id)}" ${actionAttrs(`unbind-server-${binding.server_id}`)}>${actionText(`unbind-server-${binding.server_id}`, "Unbind", "Unbinding...")}</button>
         </div>
       </td>
     </tr>
@@ -2449,7 +2505,7 @@ function renderBindings() {
             <span>项目在该服务器上的路径</span>
             <input name="project_path" type="text" value="${escapeHtml(state.drafts.binding.project_path)}" autocomplete="off" />
           </label>
-          <button type="submit" ${!projectId ? "disabled" : ""}>绑定服务器</button>
+          <button type="submit" ${!projectId ? "disabled" : actionAttrs("bind-server")}>${actionText("bind-server", "绑定服务器", "绑定中...")}</button>
         </form>
       </section>
     </div>
@@ -2470,7 +2526,7 @@ function renderTaskRow(task) {
       <td>${escapeHtml(taskMessage(task))}</td>
       <td>${formatTime(task.created_at)}</td>
       <td>${formatTime(task.completed_at || task.claimed_at)}</td>
-      <td><button type="button" data-task-detail="${escapeHtml(task.id)}">Details</button></td>
+      <td><button type="button" data-task-detail="${escapeHtml(task.id)}" ${actionAttrs(`task-detail-${task.id}`)}>${actionText(`task-detail-${task.id}`, "Details", "Loading...")}</button></td>
     </tr>
   `;
 }
@@ -2488,7 +2544,7 @@ function renderTasks() {
       <section class="panel wide-list">
         <div class="panel-header">
           <h3>Executor Task Stream</h3>
-          <button type="button" data-refresh-tasks>Refresh Tasks</button>
+          <button type="button" data-refresh-tasks ${actionAttrs("refresh-tasks")}>${actionText("refresh-tasks", "Refresh Tasks", "Refreshing...")}</button>
         </div>
         <div class="status-strip">
           <span><strong>${tasks.length}</strong> total</span>
@@ -2586,7 +2642,7 @@ function renderReports() {
             <input name="confirmed" type="checkbox" ${state.drafts.actionPlan.confirmed ? "checked" : ""} />
             <span>已人工确认执行</span>
           </label>
-          <button type="submit">生成主动计划</button>
+          <button type="submit" ${actionAttrs("plan-action")}>${actionText("plan-action", "生成主动计划", "生成中...")}</button>
         </form>
       </section>
 
@@ -2606,14 +2662,14 @@ function renderReports() {
           <h3>Config Plan</h3>
           <div class="row-actions">
             <span>${escapeHtml(displayValue(state.plan?.status))}</span>
-            <button type="button" data-generate-config-plan>Generate</button>
+            <button type="button" data-generate-config-plan ${actionAttrs("config-plan")}>${actionText("config-plan", "Generate", "Generating...")}</button>
           </div>
         </div>
         <p class="muted-copy">${escapeHtml(displayValue(state.plan?.summary))}</p>
         <div class="steps vertical">
           ${planItems.length ? planItems.map(renderStep).join("") : `<p class="muted-copy">${MISSING_VALUE}</p>`}
         </div>
-        <button class="full-button" type="button" data-execute-plan>执行配置计划</button>
+        <button class="full-button" type="button" data-execute-plan ${actionAttrs("execute-plan")}>${actionText("execute-plan", "执行配置计划", "执行中...")}</button>
       </section>
 
       <section class="panel">
@@ -2634,7 +2690,7 @@ function renderReports() {
       <section class="panel">
         <div class="panel-header">
           <h3>Git AI</h3>
-          <button type="button" data-analyze-git>Analyze Git</button>
+          <button type="button" data-analyze-git ${actionAttrs("analyze-git")}>${actionText("analyze-git", "Analyze Git", "Analyzing...")}</button>
         </div>
         <div class="report-preview compact">
           <pre>${escapeHtml(renderJsonBlock(state.gitAnalysis))}</pre>
@@ -2644,7 +2700,7 @@ function renderReports() {
       <section class="panel report-panel">
         <div class="panel-header">
           <h3>AI Report</h3>
-          <button type="button" data-generate-report>生成 Markdown 报告</button>
+          <button type="button" data-generate-report ${actionAttrs("generate-report")}>${actionText("generate-report", "生成 Markdown 报告", "生成中...")}</button>
         </div>
         <div class="report-preview markdown-render">
           ${renderMarkdown(state.report)}
@@ -2706,7 +2762,7 @@ function renderSettings() {
             <span>API Base URL</span>
             <input name="apiBase" type="url" value="${escapeHtml(state.drafts.settings.apiBase)}" autocomplete="off" />
           </label>
-          <button type="submit">保存并重新连接</button>
+          <button type="submit" ${actionAttrs("save-settings")}>${actionText("save-settings", "保存并重新连接", "连接中...")}</button>
         </form>
       </section>
       <section class="panel">
@@ -2721,7 +2777,7 @@ function renderSettings() {
           <span>Tasks</span><strong>${escapeHtml(localData.executorTasks.length)}</strong>
           <span>Last Issue</span><strong>${escapeHtml(displayValue(state.backendIssue))}</strong>
         </div>
-        <button class="full-button" type="button" data-use-local-demo>Use Local Demo</button>
+        <button class="full-button" type="button" data-use-local-demo ${actionAttrs("use-local-demo")}>${actionText("use-local-demo", "Use Local Demo")}</button>
       </section>
       <section class="panel">
         <div class="panel-header">
@@ -2776,20 +2832,24 @@ function bindShell() {
   });
 
   document.querySelector("[data-refresh]")?.addEventListener("click", async () => {
-    setToast("正在刷新后端数据");
-    await loadData({ silent: true });
+    await runAction("refresh-data", "正在刷新后端数据", async () => {
+      await loadData({ silent: true });
+    });
   });
 
   document.querySelector("[data-use-local-demo]")?.addEventListener("click", async () => {
-    await activateLocalDemo("已切换到 Local Demo");
+    await runAction("use-local-demo", "正在切换到 Local Demo", async () => {
+      await activateLocalDemo("已切换到 Local Demo");
+    });
   });
 
   document.querySelector("[data-retry-backend]")?.addEventListener("click", async () => {
-    state.localDemoActive = false;
-    state.backendMode = "checking";
-    state.backendIssue = "";
-    setToast("正在重新连接后端");
-    await loadData({ silent: true });
+    await runAction("retry-backend", "正在重新连接后端", async () => {
+      state.localDemoActive = false;
+      state.backendMode = "checking";
+      state.backendIssue = "";
+      await loadData({ silent: true });
+    });
   });
 
   document.querySelector("[data-project-select]")?.addEventListener("change", async (event) => {
@@ -2817,8 +2877,9 @@ function bindShell() {
   document.querySelector("[data-analyze-git]")?.addEventListener("click", handleAnalyzeGit);
   document.querySelector("[data-execute-plan]")?.addEventListener("click", handleExecutePlan);
   document.querySelector("[data-refresh-tasks]")?.addEventListener("click", async () => {
-    setToast("正在刷新 executor tasks");
-    await loadData({ silent: true });
+    await runAction("refresh-tasks", "正在刷新 executor tasks", async () => {
+      await loadData({ silent: true });
+    });
   });
 
   document.querySelectorAll("[data-check-server]").forEach((button) => {
@@ -2905,24 +2966,26 @@ async function handleCreateProject(event) {
     setToast("项目名称和路径不能为空");
     return;
   }
-  const created = await request(
-    "/projects",
-    { method: "POST", body },
-    null
-  );
-  if (!created) {
-    setToast("后端未返回创建结果");
-    return;
-  }
-  state.projects = [created, ...state.projects];
-  state.selectedProjectId = created.id;
-  state.drafts.project = {
-    name: "",
-    path: "",
-    description: ""
-  };
-  setToast("项目已创建");
-  await loadData({ silent: true });
+  await runAction("create-project", "正在创建项目", async () => {
+    const created = await request(
+      "/projects",
+      { method: "POST", body },
+      null
+    );
+    if (!created) {
+      setToast("后端未返回创建结果");
+      return;
+    }
+    state.projects = [created, ...state.projects];
+    state.selectedProjectId = created.id;
+    state.drafts.project = {
+      name: "",
+      path: "",
+      description: ""
+    };
+    setToast("项目已创建");
+    await loadData({ silent: true });
+  });
 }
 
 async function activateLocalDemo(message = "Local Demo 已启用") {
@@ -2948,26 +3011,28 @@ async function handleCreateServer(event) {
     setToast("服务器名称、Host、Port、Username 不能为空");
     return;
   }
-  const created = await request(
-    "/servers",
-    { method: "POST", body },
-    null
-  );
-  if (!created) {
-    setToast("后端未返回创建结果");
-    return;
-  }
-  state.servers = [created, ...state.servers];
-  state.drafts.server = {
-    name: "",
-    host: "",
-    port: "",
-    username: "",
-    connection_mode: "executor",
-    description: ""
-  };
-  setToast("服务器已创建");
-  await loadData({ silent: true });
+  await runAction("create-server", "正在创建服务器", async () => {
+    const created = await request(
+      "/servers",
+      { method: "POST", body },
+      null
+    );
+    if (!created) {
+      setToast("后端未返回创建结果");
+      return;
+    }
+    state.servers = [created, ...state.servers];
+    state.drafts.server = {
+      name: "",
+      host: "",
+      port: "",
+      username: "",
+      connection_mode: "executor",
+      description: ""
+    };
+    setToast("服务器已创建");
+    await loadData({ silent: true });
+  });
 }
 
 async function handleBindServer(event) {
@@ -2988,23 +3053,41 @@ async function handleBindServer(event) {
     setToast("服务器和项目路径不能为空");
     return;
   }
-
-  const created = await request(
-    `/projects/${projectId}/bind-server`,
-    { method: "POST", body },
-    null
+  const duplicateBinding = (state.bindings || []).find(
+    (binding) =>
+      Number(binding.server_id) === serverId &&
+      String(binding.project_path || "").trim() === body.project_path
   );
-  if (!created) {
-    setToast("后端未返回绑定结果");
+  if (duplicateBinding) {
+    setToast("该服务器和项目路径已经绑定");
+    return;
+  }
+  const sameServerBinding = (state.bindings || []).find((binding) => Number(binding.server_id) === serverId);
+  if (
+    sameServerBinding &&
+    !confirmAction("该服务器已绑定到当前项目。确认继续为同一服务器新增另一个项目路径绑定？")
+  ) {
     return;
   }
 
-  state.drafts.binding = {
-    server_id: "",
-    project_path: ""
-  };
-  setToast("服务器绑定已创建");
-  await loadData({ silent: true });
+  await runAction("bind-server", "正在绑定服务器", async () => {
+    const created = await request(
+      `/projects/${projectId}/bind-server`,
+      { method: "POST", body },
+      null
+    );
+    if (!created) {
+      setToast("后端未返回绑定结果");
+      return;
+    }
+
+    state.drafts.binding = {
+      server_id: "",
+      project_path: ""
+    };
+    setToast("服务器绑定已创建");
+    await loadData({ silent: true });
+  });
 }
 
 async function handleUnbindServer(serverId) {
@@ -3014,19 +3097,26 @@ async function handleUnbindServer(serverId) {
     return;
   }
 
-  const result = await request(
-    `/projects/${projectId}/servers/${serverId}`,
-    { method: "DELETE" },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回解绑结果");
+  const server = state.servers.find((item) => Number(item.id) === Number(serverId));
+  if (!confirmAction(`确认解除 ${displayValue(server?.name || `Server ${serverId}`)} 与当前项目的绑定？`)) {
     return;
   }
 
-  state.bindings = state.bindings.filter((binding) => Number(binding.server_id) !== Number(serverId));
-  setToast(result.message || "服务器绑定已解除");
-  await loadData({ silent: true });
+  await runAction(`unbind-server-${serverId}`, "正在解除服务器绑定", async () => {
+    const result = await request(
+      `/projects/${projectId}/servers/${serverId}`,
+      { method: "DELETE" },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回解绑结果");
+      return;
+    }
+
+    state.bindings = state.bindings.filter((binding) => Number(binding.server_id) !== Number(serverId));
+    setToast(result.message || "服务器绑定已解除");
+    await loadData({ silent: true });
+  });
 }
 
 async function handleDetectServer(serverId) {
@@ -3036,32 +3126,47 @@ async function handleDetectServer(serverId) {
     return;
   }
 
-  const result = await request(
-    `/projects/${projectId}/servers/${serverId}/detect`,
-    { method: "POST" },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回检测结果");
+  const server = state.servers.find((item) => Number(item.id) === Number(serverId));
+  if (!confirmAction(`确认为 ${displayValue(server?.name || `Server ${serverId}`)} 创建 Git 和环境检测任务？`)) {
     return;
   }
 
-  setToast(result.message || `检测状态：${displayValue(result.status)}`);
-  await loadData({ silent: true });
+  await runAction(`detect-server-${serverId}`, "正在创建检测任务", async () => {
+    const result = await request(
+      `/projects/${projectId}/servers/${serverId}/detect`,
+      { method: "POST" },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回检测结果");
+      return;
+    }
+
+    setToast(result.message || `检测状态：${displayValue(result.status)}`);
+    await loadData({ silent: true });
+  });
 }
 
 async function handleSettings(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  state.apiBase = normalizeApiBase(form.get("apiBase"));
-  localStorage.setItem(API_BASE_KEY, state.apiBase);
-  localStorage.setItem(API_BASE_VERSION_KEY, API_BASE_VERSION);
-  state.drafts.settings.apiBase = state.apiBase;
-  state.localDemoActive = false;
-  state.backendMode = "checking";
-  state.backendIssue = "";
-  setToast("后端地址已保存");
-  await loadData({ silent: true });
+  const nextApiBase = normalizeApiBase(form.get("apiBase"));
+  if (!nextApiBase) {
+    setToast("API Base URL 不能为空");
+    return;
+  }
+
+  await runAction("save-settings", "正在保存并连接后端", async () => {
+    state.apiBase = nextApiBase;
+    localStorage.setItem(API_BASE_KEY, state.apiBase);
+    localStorage.setItem(API_BASE_VERSION_KEY, API_BASE_VERSION);
+    state.drafts.settings.apiBase = state.apiBase;
+    state.localDemoActive = false;
+    state.backendMode = "checking";
+    state.backendIssue = "";
+    setToast("后端地址已保存");
+    await loadData({ silent: true });
+  });
 }
 
 async function handleReport() {
@@ -3070,25 +3175,27 @@ async function handleReport() {
     setToast("后端未返回项目，无法生成报告");
     return;
   }
-  const report = await request(
-    "/reports/project",
-    {
-      method: "POST",
-      body: {
-        project_id: projectId,
-        include_ai_analysis: true
-      }
-    },
-    null
-  );
-  if (!report?.content) {
-    setToast("后端未返回报告内容");
-    return;
-  }
-  state.report = report.content;
-  state.route = "reports";
-  setToast("报告已生成");
-  render();
+  await runAction("generate-report", "正在生成报告", async () => {
+    const report = await request(
+      "/reports/project",
+      {
+        method: "POST",
+        body: {
+          project_id: projectId,
+          include_ai_analysis: true
+        }
+      },
+      null
+    );
+    if (!report?.content) {
+      setToast("后端未返回报告内容");
+      return;
+    }
+    state.report = report.content;
+    state.route = "reports";
+    setToast("报告已生成");
+    render();
+  });
 }
 
 async function handleDetectProject() {
@@ -3097,33 +3204,33 @@ async function handleDetectProject() {
     setToast("后端未返回项目，无法检测");
     return;
   }
-  const bindings = await request(`/projects/${projectId}/servers`, {}, null);
-  if (!Array.isArray(bindings)) {
-    setToast("后端未返回绑定服务器列表");
-    return;
-  }
-
-  const targets = bindings.filter((binding) => binding.server_id);
+  const targets = (state.bindings || []).filter((binding) => binding.server_id);
   if (!targets.length) {
     setToast("后端未返回可检测的服务器");
     return;
   }
 
-  const results = await Promise.all(
-    targets.map((binding) =>
-      request(`/projects/${projectId}/servers/${binding.server_id}/detect`, { method: "POST" }, null)
-    )
-  );
-  const returned = results.filter(Boolean);
-  if (!returned.length) {
-    setToast("后端未返回检测结果");
+  if (!confirmAction(`确认给当前项目的 ${targets.length} 台绑定服务器创建检测任务？`)) {
     return;
   }
 
-  const queued = returned.filter((item) => item.status === "queued").length;
-  const completed = returned.filter((item) => item.status === "completed").length;
-  setToast(`检测触发完成：${completed} completed，${queued} queued`);
-  await loadData({ silent: true });
+  await runAction("detect-project", "正在创建项目检测任务", async () => {
+    const results = await Promise.all(
+      targets.map((binding) =>
+        request(`/projects/${projectId}/servers/${binding.server_id}/detect`, { method: "POST" }, null)
+      )
+    );
+    const returned = results.filter(Boolean);
+    if (!returned.length) {
+      setToast("后端未返回检测结果");
+      return;
+    }
+
+    const queued = returned.filter((item) => item.status === "queued").length;
+    const completed = returned.filter((item) => item.status === "completed").length;
+    setToast(`检测触发完成：${completed} completed，${queued} queued`);
+    await loadData({ silent: true });
+  });
 }
 
 async function handleRefreshAi() {
@@ -3132,23 +3239,25 @@ async function handleRefreshAi() {
     setToast("后端未返回项目，无法刷新 AI");
     return;
   }
-  state.analysis = await request(
-    `/projects/${projectId}/ai/analyze-env`,
-    {
-      method: "POST",
-      body: {
-        question: "请重新分析当前项目风险",
-        focus: "environment"
-      }
-    },
-    null
-  );
-  if (!state.analysis) {
-    setToast("后端未返回 AI 分析");
-    return;
-  }
-  setToast("AI 分析已刷新");
-  render();
+  await runAction("refresh-ai", "正在刷新 AI 分析", async () => {
+    state.analysis = await request(
+      `/projects/${projectId}/ai/analyze-env`,
+      {
+        method: "POST",
+        body: {
+          question: "请重新分析当前项目风险",
+          focus: "environment"
+        }
+      },
+      null
+    );
+    if (!state.analysis) {
+      setToast("后端未返回 AI 分析");
+      return;
+    }
+    setToast("AI 分析已刷新");
+    render();
+  });
 }
 
 async function handleGenerateConfigPlan() {
@@ -3175,20 +3284,22 @@ async function handleGenerateConfigPlan() {
     body.source_server_id = sourceServerId;
   }
 
-  const result = await request(
-    `/projects/${projectId}/ai/config-plan`,
-    { method: "POST", body },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回配置计划");
-    return;
-  }
+  await runAction("config-plan", "正在生成配置计划", async () => {
+    const result = await request(
+      `/projects/${projectId}/ai/config-plan`,
+      { method: "POST", body },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回配置计划");
+      return;
+    }
 
-  state.plan = result;
-  state.actionPlan = null;
-  setToast(`配置计划状态：${displayValue(result.status)}`);
-  render();
+    state.plan = result;
+    state.actionPlan = null;
+    setToast(`配置计划状态：${displayValue(result.status)}`);
+    render();
+  });
 }
 
 async function handleAnalyzeGit() {
@@ -3198,25 +3309,27 @@ async function handleAnalyzeGit() {
     return;
   }
 
-  const result = await request(
-    `/projects/${projectId}/ai/analyze-git`,
-    {
-      method: "POST",
-      body: {
-        analyses: ["status", "doctor", "map", "sync_plan", "commit_plan"]
-      }
-    },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回 Git AI 分析");
-    return;
-  }
+  await runAction("analyze-git", "正在分析 Git", async () => {
+    const result = await request(
+      `/projects/${projectId}/ai/analyze-git`,
+      {
+        method: "POST",
+        body: {
+          analyses: ["status", "doctor", "map", "sync_plan", "commit_plan"]
+        }
+      },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回 Git AI 分析");
+      return;
+    }
 
-  state.gitAnalysis = result;
-  state.route = "reports";
-  setToast("Git AI 分析已返回");
-  render();
+    state.gitAnalysis = result;
+    state.route = "reports";
+    setToast("Git AI 分析已返回");
+    render();
+  });
 }
 
 async function handlePlanAction(event) {
@@ -3251,51 +3364,58 @@ async function handlePlanAction(event) {
     setToast("直接进入 executor 队列前必须人工确认");
     return;
   }
-
-  const result = await request(
-    `/projects/${projectId}/ai/plan-action`,
-    { method: "POST", body },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回主动计划");
+  if (body.auto_execute && !confirmAction("确认将主动计划直接转入 executor 队列？")) {
     return;
   }
 
-  state.actionPlan = result;
-  if (result.plan) {
-    state.plan = {
-      ...result.plan,
-      goal: result.goal || body.goal,
-      status: result.plan.status || result.status,
-      target_server_id: result.target_server?.id || body.target_server_id,
-      target_server_name: result.target_server?.name,
-      source_server_id: body.source_server_id
-    };
-  }
-  if (Array.isArray(result.tasks)) {
-    state.executionResult = result;
-  }
-  setToast(result.message || `主动计划状态：${displayValue(result.status)}`);
-  render();
+  await runAction("plan-action", "正在生成主动计划", async () => {
+    const result = await request(
+      `/projects/${projectId}/ai/plan-action`,
+      { method: "POST", body },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回主动计划");
+      return;
+    }
+
+    state.actionPlan = result;
+    if (result.plan) {
+      state.plan = {
+        ...result.plan,
+        goal: result.goal || body.goal,
+        status: result.plan.status || result.status,
+        target_server_id: result.target_server?.id || body.target_server_id,
+        target_server_name: result.target_server?.name,
+        source_server_id: body.source_server_id
+      };
+    }
+    if (Array.isArray(result.tasks)) {
+      state.executionResult = result;
+    }
+    setToast(result.message || `主动计划状态：${displayValue(result.status)}`);
+    render();
+  });
 }
 
 async function handleCheckServer(serverId) {
-  const result = await request(
-    `/servers/${serverId}/check-connection`,
-    { method: "POST" },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回连接检查结果");
-    return;
-  }
-  state.servers = state.servers.map((server) =>
-    server.id === serverId
-      ? { ...server, connection_status: result.connected ? "online" : "warning" }
-      : server
-  );
-  setToast(result.message || "连接检查完成");
+  await runAction(`check-server-${serverId}`, "正在检查服务器连接", async () => {
+    const result = await request(
+      `/servers/${serverId}/check-connection`,
+      { method: "POST" },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回连接检查结果");
+      return;
+    }
+    state.servers = state.servers.map((server) =>
+      server.id === serverId
+        ? { ...server, connection_status: result.connected ? "online" : "warning" }
+        : server
+    );
+    setToast(result.message || "连接检查完成");
+  });
 }
 
 async function handleServerDetail(serverId) {
@@ -3304,21 +3424,23 @@ async function handleServerDetail(serverId) {
     return;
   }
 
-  const detail = await request(
-    `/servers/${serverId}/status`,
-    {},
-    null
-  );
-  if (!detail) {
-    setToast("后端未返回服务器详情");
-    return;
-  }
+  await runAction(`server-detail-${serverId}`, "正在读取服务器详情", async () => {
+    const detail = await request(
+      `/servers/${serverId}/status`,
+      {},
+      null
+    );
+    if (!detail) {
+      setToast("后端未返回服务器详情");
+      return;
+    }
 
-  state.selectedServerId = serverId;
-  state.serverDetail = detail;
-  state.route = "serverDetail";
-  setToast("服务器详情已返回");
-  render();
+    state.selectedServerId = serverId;
+    state.serverDetail = detail;
+    state.route = "serverDetail";
+    setToast("服务器详情已返回");
+    render();
+  });
 }
 
 async function handleTaskDetail(taskId) {
@@ -3327,20 +3449,22 @@ async function handleTaskDetail(taskId) {
     return;
   }
 
-  const detail = await request(
-    `/executor/tasks/${encodeURIComponent(taskId)}`,
-    {},
-    null
-  );
-  if (!detail) {
-    setToast("后端未返回 task 详情");
-    return;
-  }
+  await runAction(`task-detail-${taskId}`, "正在读取 Task 详情", async () => {
+    const detail = await request(
+      `/executor/tasks/${encodeURIComponent(taskId)}`,
+      {},
+      null
+    );
+    if (!detail) {
+      setToast("后端未返回 task 详情");
+      return;
+    }
 
-  state.executorTaskDetail = detail;
-  state.route = "tasks";
-  setToast("Task 详情已返回");
-  render();
+    state.executorTaskDetail = detail;
+    state.route = "tasks";
+    setToast("Task 详情已返回");
+    render();
+  });
 }
 
 async function handleExecutePlan() {
@@ -3359,24 +3483,32 @@ async function handleExecutePlan() {
     setToast("后端未返回配置步骤，无法执行");
     return;
   }
-  const result = await request(
-    `/projects/${projectId}/servers/${targetServerId}/execute-config-plan`,
-    {
-      method: "POST",
-      body: {
-        confirmed: true,
-        steps
-      }
-    },
-    null
-  );
-  if (!result) {
-    setToast("后端未返回执行结果");
+
+  const target = state.servers.find((server) => Number(server.id) === Number(targetServerId));
+  if (!confirmAction(`确认执行 ${steps.length} 个配置步骤到 ${displayValue(target?.name || `Server ${targetServerId}`)}？`)) {
     return;
   }
-  state.executionResult = result;
-  setToast(result.message || `执行状态：${displayValue(result.status)}`);
-  render();
+
+  await runAction("execute-plan", "正在执行配置计划", async () => {
+    const result = await request(
+      `/projects/${projectId}/servers/${targetServerId}/execute-config-plan`,
+      {
+        method: "POST",
+        body: {
+          confirmed: true,
+          steps
+        }
+      },
+      null
+    );
+    if (!result) {
+      setToast("后端未返回执行结果");
+      return;
+    }
+    state.executionResult = result;
+    setToast(result.message || `执行状态：${displayValue(result.status)}`);
+    render();
+  });
 }
 
 render();

@@ -40,6 +40,10 @@ button:disabled {
   opacity: 0.55;
 }
 
+button[aria-busy="true"] {
+  pointer-events: none;
+}
+
 .login-screen {
   min-height: 100vh;
   display: grid;
@@ -581,12 +585,61 @@ td span,
 
 .table-wrap {
   overflow-x: auto;
+  scrollbar-gutter: stable;
 }
 
 table {
   width: 100%;
   min-width: 680px;
   border-collapse: collapse;
+}
+
+.dashboard-table-wrap {
+  overflow-x: auto;
+}
+
+.dashboard-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+  padding: 10px 8px;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-table td code,
+.dashboard-table td span {
+  overflow-wrap: anywhere;
+}
+
+.health-table th:nth-child(1),
+.health-table td:nth-child(1) {
+  width: 30%;
+}
+
+.health-table th:nth-child(2),
+.health-table td:nth-child(2) {
+  width: 16%;
+}
+
+.health-table th:nth-child(3),
+.health-table td:nth-child(3),
+.health-table th:nth-child(4),
+.health-table td:nth-child(4),
+.health-table th:nth-child(5),
+.health-table td:nth-child(5) {
+  width: 14%;
+}
+
+.health-table th:nth-child(6),
+.health-table td:nth-child(6) {
+  width: 12%;
+}
+
+.matrix-table {
+  min-width: 780px;
 }
 
 th,

@@ -220,6 +220,7 @@ async function runScenario(cdp) {
       const serverName = "E2E Local " + suffix;
       const projectPath = "/tmp/projectpilot-e2e-" + suffix;
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      window.confirm = () => true;
       const waitFor = async (predicate, label, timeout = 8000) => {
         const deadline = Date.now() + timeout;
         while (Date.now() < deadline) {
