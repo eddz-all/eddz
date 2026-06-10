@@ -233,10 +233,10 @@ class BackendConsoleTests(unittest.TestCase):
         if not RICH_AVAILABLE:
             self.skipTest("Rich is required for compact navigation assertions.")
 
-        panel = render_compact_nav_bar(selected="g", width=70)
+        panel = render_compact_nav_bar(selected="8", width=70)
         text = panel.renderable.plain
 
-        for marker in ("1", "3", "4", "B", "A", "5", "M", "G"):
+        for marker in ("1", "2", "3", "4", "5", "6", "7", "8"):
             self.assertIn(marker, text)
 
     def test_rich_frame_clear_moves_to_home_instead_of_appending(self) -> None:
@@ -301,9 +301,9 @@ class BackendConsoleTests(unittest.TestCase):
         self.assertEqual(normalize_action_key("h"), "h")
         self.assertEqual(normalize_action_key("j"), "j")
         self.assertEqual(normalize_action_key("k"), "k")
-        self.assertEqual(normalize_nav_key("P"), "3")
-        self.assertEqual(normalize_nav_key("S"), "4")
-        self.assertEqual(normalize_nav_key("G"), "g")
+        self.assertEqual(normalize_nav_key("P"), "2")
+        self.assertEqual(normalize_nav_key("S"), "3")
+        self.assertEqual(normalize_nav_key("G"), "8")
         self.assertEqual(normalize_nav_key("H"), "")
         self.assertEqual(normalize_nav_key("Q"), "0")
         self.assertEqual(normalize_nav_key("x"), "")
@@ -361,7 +361,7 @@ class BackendConsoleTests(unittest.TestCase):
         server, _ = start_backend_test_server()
         try:
             output = io.StringIO()
-            choices = iter(["3", "0"])
+            choices = iter(["2", "0"])
 
             with patch("projectpilot.backend_console.shutil.get_terminal_size", return_value=terminal_size((140, 35))):
                 result = run_backend_console(
@@ -403,7 +403,7 @@ class BackendConsoleTests(unittest.TestCase):
             text = output.getvalue()
             self.assertIn("ProjectPilot | Projects", text)
             if RICH_AVAILABLE:
-                self.assertIn(">3  Projects", text)
+                self.assertIn(">2  Projects", text)
                 self.assertNotIn("Dashboard     *", text)
             self.assertNotIn("Unknown shortcut", text)
         finally:
@@ -567,7 +567,7 @@ class BackendConsoleTests(unittest.TestCase):
         server, _ = start_backend_test_server()
         try:
             output = io.StringIO()
-            choices = iter(["3\n", "\n", "0"])
+            choices = iter(["2\n", "\n", "0"])
 
             result = run_backend_console(
                 BackendProfile(
@@ -702,7 +702,7 @@ class BackendConsoleTests(unittest.TestCase):
         server, state = start_backend_test_server()
         try:
             output = io.StringIO()
-            choices = iter(["6", "down", "0"])
+            choices = iter(["r", "down", "0"])
 
             result = run_backend_console(
                 BackendProfile(
@@ -727,7 +727,7 @@ class BackendConsoleTests(unittest.TestCase):
         server, _ = start_backend_test_server(projects_payload={"error": "unexpected shape"})
         try:
             output = io.StringIO()
-            choices = iter(["3", "0"])
+            choices = iter(["2", "0"])
 
             result = run_backend_console(
                 BackendProfile(
@@ -757,7 +757,7 @@ class BackendConsoleTests(unittest.TestCase):
         )
         try:
             output = io.StringIO()
-            choices = iter(["3", "4", "5", "0"])
+            choices = iter(["2", "3", "6", "0"])
 
             result = run_backend_console(
                 BackendProfile(
@@ -781,7 +781,7 @@ class BackendConsoleTests(unittest.TestCase):
 
     def test_interactive_projects_page_keeps_backend_error_in_shell(self) -> None:
         output = io.StringIO()
-        choices = iter(["3", "0"])
+        choices = iter(["2", "0"])
 
         result = run_backend_console(
             BackendProfile(
@@ -804,7 +804,7 @@ class BackendConsoleTests(unittest.TestCase):
         server, state = start_backend_test_server()
         try:
             output = io.StringIO()
-            choices = iter(["6", "0"])
+            choices = iter(["r", "0"])
 
             result = run_backend_console(
                 BackendProfile(
@@ -830,7 +830,7 @@ class BackendConsoleTests(unittest.TestCase):
         server, state = start_backend_test_server()
         try:
             output = io.StringIO()
-            choices = iter(["6\n", "\n", "0"])
+            choices = iter(["r\n", "\n", "0"])
 
             result = run_backend_console(
                 BackendProfile(

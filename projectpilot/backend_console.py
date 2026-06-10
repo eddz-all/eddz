@@ -76,13 +76,13 @@ DEFAULT_BACKEND_PROFILE = BackendProfile(
 
 NAV_ITEMS: tuple[tuple[str, str, str], ...] = (
     ("1", "Dashboard", "D"),
-    ("3", "Projects", "P"),
-    ("4", "Servers", "S"),
-    ("b", "Bindings", "B"),
-    ("a", "AI Ops", "A"),
-    ("5", "Tasks", "T"),
-    ("m", "API Map", "M"),
-    ("g", "Settings", "G"),
+    ("2", "Projects", "P"),
+    ("3", "Servers", "S"),
+    ("4", "Bindings", "B"),
+    ("5", "AI Ops", "A"),
+    ("6", "Tasks", "T"),
+    ("7", "API Map", "M"),
+    ("8", "Settings", "G"),
 )
 
 NAV_KEYS = tuple(key for key, _, _ in NAV_ITEMS)
@@ -521,19 +521,19 @@ def run_backend_console(
                 return
             if active == "1":
                 cached_payload = load_dashboard_snapshot(profile)
-            elif active == "3":
+            elif active == "2":
                 cached_payload = dashboard_backend_json(profile, "GET", "/projects", [])
-            elif active == "4":
+            elif active == "3":
                 cached_payload = dashboard_backend_json(profile, "GET", "/servers", [])
-            elif active == "5":
-                cached_payload = dashboard_backend_json(profile, "GET", "/executor/tasks", [])
-            elif active == "b":
+            elif active == "4":
                 cached_payload = dashboard_backend_json(profile, "GET", f"/projects/{profile.default_project_id}/servers", [])
-            elif active == "a":
+            elif active == "5":
                 cached_payload = dashboard_backend_json(profile, "GET", "/ai/settings", {})
-            elif active == "m":
+            elif active == "6":
+                cached_payload = dashboard_backend_json(profile, "GET", "/executor/tasks", [])
+            elif active == "7":
                 cached_payload = (API_CONTRACT, None)
-            elif active == "g":
+            elif active == "8":
                 health, error = dashboard_backend_json(profile, "GET", "/health", {"status": "offline"})
                 cached_payload = (
                     {
@@ -557,78 +557,78 @@ def run_backend_console(
         def render_active_page() -> None:
             if active == "1":
                 ui.render_dashboard_snapshot(cached_payload, selected=selected)
-            elif active == "3":
+            elif active == "2":
                 data, error = cached_payload
                 ui.render_endpoint_data_page(
                     profile,
                     title="Projects",
-                    active="3",
+                    active="2",
                     selected=selected,
                     data=data,
                     error=error,
                     body_builder=render_projects_panel,
                 )
-            elif active == "4":
+            elif active == "3":
                 data, error = cached_payload
                 ui.render_endpoint_data_page(
                     profile,
                     title="Servers",
-                    active="4",
+                    active="3",
                     selected=selected,
                     data=data,
                     error=error,
                     body_builder=render_servers_panel,
                 )
-            elif active == "5":
-                data, error = cached_payload
-                ui.render_endpoint_data_page(
-                    profile,
-                    title="Executor Tasks",
-                    active="5",
-                    selected=selected,
-                    data=data,
-                    error=error,
-                    body_builder=lambda value: render_tasks_panel(value, title="Executor Tasks"),
-                )
-            elif active == "b":
+            elif active == "4":
                 data, error = cached_payload
                 ui.render_endpoint_data_page(
                     profile,
                     title="Bindings",
-                    active="b",
+                    active="4",
                     selected=selected,
                     data=data,
                     error=error,
                     body_builder=render_bindings_panel,
                 )
-            elif active == "a":
+            elif active == "5":
                 data, error = cached_payload
                 ui.render_endpoint_data_page(
                     profile,
                     title="AI Ops",
-                    active="a",
+                    active="5",
                     selected=selected,
                     data=data,
                     error=error,
                     body_builder=render_ai_ops_panel,
                 )
-            elif active == "m":
+            elif active == "6":
+                data, error = cached_payload
+                ui.render_endpoint_data_page(
+                    profile,
+                    title="Executor Tasks",
+                    active="6",
+                    selected=selected,
+                    data=data,
+                    error=error,
+                    body_builder=lambda value: render_tasks_panel(value, title="Executor Tasks"),
+                )
+            elif active == "7":
                 data, error = cached_payload
                 ui.render_endpoint_data_page(
                     profile,
                     title="API Map",
-                    active="m",
+                    active="7",
                     selected=selected,
                     data=data,
                     error=error,
                     body_builder=render_api_map_panel,
                 )
-            elif active == "g":
+            elif active == "8":
                 data, error = cached_payload
                 ui.render_endpoint_data_page(
                     profile,
                     title="Settings",
-                    active="g",
+                    active="8",
                     selected=selected,
                     data=data,
                     error=error,
@@ -674,7 +674,7 @@ def run_backend_console(
                     elif next_choice == "esc":
                         selected = "1"
                         active = selected
-                    elif next_choice in {"6", "r"}:
+                    elif next_choice == "r":
                         detect_result = execute_detect_action(profile)
                         page_cache.pop("r", None)
                         active = "r"
@@ -792,7 +792,7 @@ class ConsoleUI:
         elif self.width < 120:
             shortcuts = "↑/↓ Pages  Enter Refresh  R Detect  q Quit  ·  D/P/S/B/A/T/M/G"
         else:
-            shortcuts = "↑/↓ Switch Pages  Enter/Ctrl+R Refresh  Esc Dashboard  R/6 Detect  q/0 Quit"
+            shortcuts = "↑/↓ Switch Pages  Enter/Ctrl+R Refresh  Esc Dashboard  R Detect  q/0 Quit"
         status_line = clip(shortcuts, max(20, self.width - 2))
         if self.rich_enabled and self.console is not None:
             self.console.print(Text(f" {status_line} ", style=f"bold {UI_MUTED} on {UI_PANEL_ALT}"))
@@ -888,11 +888,11 @@ class ConsoleUI:
 
         self.render_plain_dashboard(dashboard)
 
-    def render_health_page(self, profile: BackendProfile, *, selected: str = "2") -> None:
+    def render_health_page(self, profile: BackendProfile, *, selected: str = "1") -> None:
         self.render_endpoint_page(
             profile,
             title="Health",
-            active="2",
+            active="h",
             selected=selected,
             method="GET",
             path="/health",
@@ -900,11 +900,11 @@ class ConsoleUI:
             body_builder=lambda data: render_json_panel(data, title="Health Response"),
         )
 
-    def render_projects_page(self, profile: BackendProfile, *, selected: str = "3") -> None:
+    def render_projects_page(self, profile: BackendProfile, *, selected: str = "2") -> None:
         self.render_endpoint_page(
             profile,
             title="Projects",
-            active="3",
+            active="2",
             selected=selected,
             method="GET",
             path="/projects",
@@ -912,11 +912,11 @@ class ConsoleUI:
             body_builder=render_projects_panel,
         )
 
-    def render_servers_page(self, profile: BackendProfile, *, selected: str = "4") -> None:
+    def render_servers_page(self, profile: BackendProfile, *, selected: str = "3") -> None:
         self.render_endpoint_page(
             profile,
             title="Servers",
-            active="4",
+            active="3",
             selected=selected,
             method="GET",
             path="/servers",
@@ -924,11 +924,11 @@ class ConsoleUI:
             body_builder=render_servers_panel,
         )
 
-    def render_tasks_page(self, profile: BackendProfile, *, selected: str = "5") -> None:
+    def render_tasks_page(self, profile: BackendProfile, *, selected: str = "6") -> None:
         self.render_endpoint_page(
             profile,
             title="Executor Tasks",
-            active="5",
+            active="6",
             selected=selected,
             method="GET",
             path="/executor/tasks",
@@ -936,7 +936,7 @@ class ConsoleUI:
             body_builder=lambda data: render_tasks_panel(data, title="Executor Tasks"),
         )
 
-    def render_detect_result_page(self, profile: BackendProfile, data: Any, error: str | None, *, selected: str = "6") -> None:
+    def render_detect_result_page(self, profile: BackendProfile, data: Any, error: str | None, *, selected: str = "1") -> None:
         errors = [error] if error else []
         backend_status = "offline" if error else "ok"
         body = render_json_panel(data, title="Detection Response") if self.rich_enabled else data
@@ -1774,7 +1774,7 @@ def render_settings_panel(data: Any) -> Any:
     session.add_row("Session", "Local console")
     session.add_row("Role", "EP Admin")
     session.add_row("Executor", "projectpilot executor server-b")
-    session.add_row("Detection", "R or 6")
+    session.add_row("Detection", "R")
     return Columns(
         [
             gui_panel(backend, title="Backend Connection", border_style=UI_BORDER),
