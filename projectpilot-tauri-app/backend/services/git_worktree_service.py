@@ -14,6 +14,36 @@ from projectpilot.git.inspector import NotGitRepositoryError, find_repo_root, in
 MAX_COMMITS = 40
 
 
+def unavailable_git_worktree(project_path: str, *, reason: str, message: str) -> dict:
+    return {
+        "success": False,
+        "reason": reason,
+        "project_path": project_path,
+        "repo_path": None,
+        "branch": None,
+        "upstream": None,
+        "commit": None,
+        "ahead": 0,
+        "behind": 0,
+        "state": reason,
+        "remote_urls": [],
+        "message": message,
+        "commits": [],
+        "refs": [],
+        "graph_text": [],
+        "worktree": {
+            "is_clean": False,
+            "state": "unavailable",
+            "staged_files": [],
+            "unstaged_files": [],
+            "untracked_files": [],
+            "conflicted_files": [],
+            "changed_files": [],
+            "counts": {"staged": 0, "unstaged": 0, "untracked": 0, "conflicted": 0},
+        },
+    }
+
+
 def _run_git(args: list[str], cwd: Path, timeout: int = 8) -> subprocess.CompletedProcess[str]:
     command = ["git", *args]
     try:
@@ -169,28 +199,19 @@ def _worktree_payload(status) -> dict:
 
 
 def inspect_git_worktree(project_path: str) -> dict:
+    requested_path = Path(project_path).expanduser()
+    if not requested_path.exists():
+        return unavailable_git_worktree(
+            project_path,
+            reason="path_missing",
+            message=f"Local workspace path does not exist on this Mac: {project_path}",
+        )
+
     try:
-        repo_path = find_repo_root(Path(project_path))
+        repo_path = find_repo_root(requested_path)
         status = inspect_repository(repo_path)
     except (NotGitRepositoryError, OSError, subprocess.SubprocessError) as error:
-        return {
-            "success": False,
-            "project_path": project_path,
-            "message": str(error),
-            "commits": [],
-            "refs": [],
-            "graph_text": [],
-            "worktree": {
-                "is_clean": False,
-                "state": "unavailable",
-                "staged_files": [],
-                "unstaged_files": [],
-                "untracked_files": [],
-                "conflicted_files": [],
-                "changed_files": [],
-                "counts": {"staged": 0, "unstaged": 0, "untracked": 0, "conflicted": 0},
-            },
-        }
+        return unavailable_git_worktree(project_path, reason="git_unavailable", message=str(error))
 
     refs, refs_by_commit = _load_refs(repo_path)
     commits = _load_commits(repo_path, refs_by_commit)

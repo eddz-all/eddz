@@ -3,10 +3,14 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Project, ProjectServerMapping, Server
-from services.git_worktree_service import inspect_git_worktree
+from services.git_worktree_service import inspect_git_worktree, unavailable_git_worktree
 
 
 router = APIRouter(tags=["git-worktree"])
+
+
+def should_inspect_on_host(server: Server) -> bool:
+    return (server.connection_mode or "").lower() == "local"
 
 
 @router.get("/projects/{project_id}/git-worktree")
@@ -24,7 +28,18 @@ def get_project_git_worktree(project_id: int, db: Session = Depends(get_db)):
 
     repositories = []
     for binding, server in bindings:
-        worktree = inspect_git_worktree(binding.project_path)
+        if should_inspect_on_host(server):
+            worktree = inspect_git_worktree(binding.project_path)
+        else:
+            worktree = unavailable_git_worktree(
+                binding.project_path,
+                reason="remote_path",
+                message=(
+                    f"{binding.project_path} belongs to {server.name} ({server.connection_mode}); "
+                    "the desktop app cannot inspect that remote filesystem directly. "
+                    "Run Git detection through the executor or bind a local workspace path."
+                ),
+            )
         repositories.append(
             {
                 **worktree,

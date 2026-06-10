@@ -3399,6 +3399,72 @@ function repoWorktreeCounts(repo) {
   };
 }
 
+function repoGraphAvailable(repo) {
+  return repo?.success !== false;
+}
+
+function gitGraphUnavailableTitle(repo) {
+  const reason = String(repo?.reason || "");
+  if (reason === "remote_path") return "Remote workspace snapshot required";
+  if (reason === "path_missing") return "Local workspace path not found";
+  if (reason === "git_unavailable") return "Git repository unavailable";
+  return "Git graph unavailable";
+}
+
+function gitGraphUnavailableMessage(repo) {
+  const reason = String(repo?.reason || "");
+  if (reason === "remote_path") {
+    return "This binding points to a server or executor filesystem path. The desktop app needs an executor Git snapshot or a local workspace binding before it can draw the graph.";
+  }
+  if (reason === "path_missing") {
+    return "The registered local workspace path does not exist on this Mac. Update the binding to an existing Git repository path.";
+  }
+  return displayValue(repo?.message || "ProjectPilot could not load a Git graph for this repository.");
+}
+
+function gitGraphUnavailableActions(repo) {
+  const reason = String(repo?.reason || "");
+  if (reason === "remote_path") {
+    return [
+      "Run server Git detection through the executor",
+      "Bind a local checkout if you want desktop-side graph rendering",
+      "Keep write operations behind explicit executor approval"
+    ];
+  }
+  if (reason === "path_missing") {
+    return [
+      "Open Projects and update the workspace path",
+      "Confirm the path exists on this Mac",
+      "Run Detect again after rebinding"
+    ];
+  }
+  return [
+    "Confirm the path is inside a Git repository",
+    "Run Detect again",
+    "Review backend logs if the error persists"
+  ];
+}
+
+function renderUnavailableGraph(repo) {
+  return `
+    <div class="empty-guidance compact graph-unavailable">
+      <strong>${escapeHtml(gitGraphUnavailableTitle(repo))}</strong>
+      <p>${escapeHtml(gitGraphUnavailableMessage(repo))}</p>
+    </div>
+  `;
+}
+
+function renderUnavailableWorktree(repo) {
+  return `
+    <div class="empty-guidance compact graph-unavailable">
+      <strong>Next steps</strong>
+      <ul class="graph-unavailable-actions">
+        ${gitGraphUnavailableActions(repo).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function renderRefPills(refs = []) {
   const visibleRefs = refs.slice(0, 8);
   if (!visibleRefs.length) return `<span class="badge muted">no refs</span>`;
@@ -3409,8 +3475,8 @@ function renderRefPills(refs = []) {
 
 function renderCommitGraph(repo) {
   const commits = (repo.commits || []).slice(0, 14);
-  if (!repo.success) {
-    return `<div class="empty-guidance compact"><strong>Git graph unavailable</strong><p>${escapeHtml(displayValue(repo.message))}</p></div>`;
+  if (!repoGraphAvailable(repo)) {
+    return renderUnavailableGraph(repo);
   }
   if (!commits.length) {
     return `<p class="muted-copy">No commits returned for this repository.</p>`;
@@ -3492,22 +3558,25 @@ function renderWorktreeFiles(repo) {
 function renderGitWorktreeRepository(repo) {
   const counts = repoWorktreeCounts(repo);
   const dirtyTotal = counts.staged + counts.unstaged + counts.untracked + counts.conflicted;
-  const stateTone = repo.success ? (counts.conflicted ? "danger" : dirtyTotal ? "warning" : "healthy") : "danger";
+  const available = repoGraphAvailable(repo);
+  const stateTone = available ? (counts.conflicted ? "danger" : dirtyTotal ? "warning" : "healthy") : "warning";
+  const title = available ? displayValue(repo.branch || "detached HEAD") : gitGraphUnavailableTitle(repo);
+  const stateLabel = available ? displayValue(repo.state || "normal") : displayValue(repo.reason || "unavailable");
   return `
-    <article class="repo-graph-card">
+    <article class="repo-graph-card ${available ? "" : "repo-graph-card-unavailable"}">
       <div class="repo-graph-header">
         <div>
           <p class="eyebrow">${escapeHtml(displayValue(repo.server_name))}</p>
-          <h4>${escapeHtml(displayValue(repo.branch || "detached HEAD"))}</h4>
+          <h4>${escapeHtml(title)}</h4>
           <code>${escapeHtml(displayValue(repo.repo_path || repo.project_path))}</code>
         </div>
         <div class="repo-graph-badges">
-          <span class="badge ${stateTone}">${escapeHtml(displayValue(repo.state || "normal"))}</span>
-          <span class="badge muted">${escapeHtml(Number(repo.ahead || 0))} ahead</span>
-          <span class="badge muted">${escapeHtml(Number(repo.behind || 0))} behind</span>
+          <span class="badge ${stateTone}">${escapeHtml(stateLabel)}</span>
+          ${available ? `<span class="badge muted">${escapeHtml(Number(repo.ahead || 0))} ahead</span>` : ""}
+          ${available ? `<span class="badge muted">${escapeHtml(Number(repo.behind || 0))} behind</span>` : ""}
         </div>
       </div>
-      <div class="repo-ref-strip">${renderRefPills(repo.refs || [])}</div>
+      ${available ? `<div class="repo-ref-strip">${renderRefPills(repo.refs || [])}</div>` : ""}
       <div class="repo-graph-body">
         <div>
           <h5>Commit Graph</h5>
@@ -3515,7 +3584,7 @@ function renderGitWorktreeRepository(repo) {
         </div>
         <div>
           <h5>Working Tree</h5>
-          ${renderWorktreeFiles(repo)}
+          ${available ? renderWorktreeFiles(repo) : renderUnavailableWorktree(repo)}
         </div>
       </div>
     </article>

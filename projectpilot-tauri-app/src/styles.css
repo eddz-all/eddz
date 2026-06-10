@@ -769,6 +769,11 @@ td span,
   background: rgba(8, 13, 24, 0.58);
 }
 
+.repo-graph-card-unavailable {
+  border-color: rgba(249, 199, 93, 0.28);
+  background: rgba(18, 25, 43, 0.68);
+}
+
 .repo-graph-header,
 .repo-graph-body {
   display: grid;
@@ -1358,6 +1363,23 @@ td strong {
 
 .empty-guidance p {
   margin: 0;
+}
+
+.empty-guidance.compact {
+  min-height: 150px;
+  align-content: start;
+}
+
+.graph-unavailable {
+  border-color: rgba(249, 199, 93, 0.3);
+  background: rgba(249, 199, 93, 0.06);
+}
+
+.graph-unavailable-actions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
 }
 
 .form-note {
