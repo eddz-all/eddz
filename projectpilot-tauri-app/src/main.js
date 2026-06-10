@@ -2740,7 +2740,6 @@ function backendModeMeta() {
 }
 
 function renderTopbar() {
-  const mode = backendModeMeta();
   const projectOptions = state.projects
     .map(
       (project) => `
@@ -2759,7 +2758,6 @@ function renderTopbar() {
       </div>
       <div class="top-actions">
         <select data-project-select aria-label="选择项目">${projectOptions}</select>
-        <span class="connection ${mode.className}">${mode.label}</span>
         <button class="icon-button" type="button" data-refresh title="刷新数据" ${actionAttrs("refresh-data")}>${actionText("refresh-data", "↻", "…")}</button>
         <button class="user-pill" type="button" data-route="settings">
           <span>${escapeHtml(state.user.initials)}</span>
