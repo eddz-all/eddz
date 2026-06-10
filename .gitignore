@@ -34,3 +34,6 @@ projectpilot-tauri-app/vendor/**/.cargo-ok
 projectpilot-tauri-app/vendor/**/.cargo_vcs_info.json
 projectpilot-tauri-app/vendor/**/.changes/
 projectpilot-tauri-app/vendor/**/.github/
+
+# Local distributable bundles for demos and class presentations
+ProjectPilot-Demo/

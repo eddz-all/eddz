@@ -1,0 +1,48 @@
+name: Build Windows Desktop App
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-windows.yml"
+      - "projectpilot-tauri-app/**"
+
+jobs:
+  build-windows:
+    name: Build Windows exe
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: projectpilot-tauri-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: projectpilot-tauri-app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri Windows bundles
+        run: npm run tauri:build
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectPilot-Windows
+          if-no-files-found: error
+          path: |
+            projectpilot-tauri-app/src-tauri/target/release/bundle/nsis/*.exe
+            projectpilot-tauri-app/src-tauri/target/release/bundle/msi/*.msi

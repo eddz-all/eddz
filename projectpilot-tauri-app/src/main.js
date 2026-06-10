@@ -11,6 +11,7 @@ const SESSION_KEY = "projectpilot.session";
 const LOCAL_DEMO_KEY = "projectpilot.localDemo.v2";
 const MISSING_VALUE = "未返回";
 const REQUEST_TIMEOUT_MS = 8000;
+const PRESENTATION_DEMO_ROOT = "ProjectPilot-Demo/projectpilot-demo";
 const gitKrakenGraphRenderer = createGitKrakenGraphRenderer({
   displayValue,
   parseTimestamp,
@@ -379,7 +380,7 @@ function hasWorktreeFiles(status = {}) {
 function defaultLocalDemoData() {
   const createdAt = localTimestamp(42);
   const scannedAt = localTimestamp(7);
-  const demoRoot = "/Users/eddz/work/projectpilot-demo";
+  const demoRoot = PRESENTATION_DEMO_ROOT;
   const workspaceRoot = `${demoRoot}/workspaces`;
   const showcaseWorktree = localDemoWorktreeForSlug("showcase-graph");
   const demoRepositories = [
@@ -609,7 +610,18 @@ function defaultLocalDemoData() {
 }
 
 function applyLocalDemoMigrations(data) {
+  const workspaceRoot = `${PRESENTATION_DEMO_ROOT}/workspaces`;
+  const repoPathByServerId = new Map(
+    data.servers.map((server) => {
+      const slug = String(server.description || "").split(":").pop()?.trim() || `server-${server.id}`;
+      return [Number(server.id), `${workspaceRoot}/${slug}`];
+    })
+  );
+
   data.projects.forEach((project) => {
+    if (Number(project.id) === 1 || String(project.path || "").includes("projectpilot-demo")) {
+      project.path = PRESENTATION_DEMO_ROOT;
+    }
     if (/local git demo workspace/i.test(project.description || "")) {
       project.description = "Course showcase workspace with rich branch, tag, conflict, detached HEAD, and dirty worktree states.";
     }
@@ -620,7 +632,32 @@ function applyLocalDemoMigrations(data) {
       server.description = String(server.description).replace(/Local demo workspace/i, "Course showcase workspace");
     }
   });
+  data.bindings.forEach((binding) => {
+    const nextPath = repoPathByServerId.get(Number(binding.server_id));
+    if (nextPath && (Number(binding.project_id) === 1 || String(binding.project_path || "").includes("projectpilot-demo"))) {
+      binding.project_path = nextPath;
+    }
+  });
+  data.gitStatuses.forEach((status) => {
+    const nextPath = repoPathByServerId.get(Number(status.server_id));
+    if (nextPath) {
+      const slug = nextPath.split("/").pop();
+      status.remote_url = `${PRESENTATION_DEMO_ROOT}/remotes/${slug}.git`;
+    }
+  });
+  data.environmentSnapshots.forEach((snapshot) => {
+    const nextPath = repoPathByServerId.get(Number(snapshot.server_id));
+    if (nextPath) {
+      snapshot.raw_data = {
+        ...(snapshot.raw_data || {}),
+        project_path: nextPath
+      };
+    }
+  });
   data.operationLogs.forEach((log) => {
+    if (String(log.detail || "").includes("projectpilot-demo")) {
+      log.detail = PRESENTATION_DEMO_ROOT;
+    }
     if (/Local Demo now opens/i.test(log.detail || "")) {
       log.detail = "The presentation dataset opens the test workspace by default.";
     }
@@ -3022,7 +3059,7 @@ function renderProjects() {
           </label>
           <label>
             <span>项目路径</span>
-            <input name="path" type="text" value="${escapeHtml(state.drafts.project.path)}" placeholder="/Users/eddz/work/projectpilot-demo" autocomplete="off" />
+            <input name="path" type="text" value="${escapeHtml(state.drafts.project.path)}" placeholder="ProjectPilot-Demo/projectpilot-demo" autocomplete="off" />
           </label>
           <label>
             <span>说明</span>
