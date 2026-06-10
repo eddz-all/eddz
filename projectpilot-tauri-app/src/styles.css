@@ -804,7 +804,7 @@ td span,
 }
 
 .repo-graph-body {
-  grid-template-columns: minmax(600px, 1.7fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
@@ -816,11 +816,6 @@ td span,
   margin: 0 0 10px;
   color: #eef4ff;
   font-size: 14px;
-}
-
-.repo-ref-strip .ref-pill {
-  min-height: 22px;
-  font-size: 11px;
 }
 
 .ref-pill {
@@ -871,11 +866,11 @@ td span,
 
 .gitlens-graph-header {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) minmax(132px, 0.42fr) 62px;
-  gap: 10px;
+  grid-template-columns: 58px minmax(118px, 1.35fr) minmax(96px, 0.9fr) 66px 62px 58px;
+  gap: 8px;
   align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
+  min-height: 28px;
+  padding: 0 8px;
   border-bottom: 1px solid rgba(145, 158, 187, 0.12);
   color: #7f8ca5;
   font-size: 10px;
@@ -886,10 +881,10 @@ td span,
 
 .gitlens-graph-body {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
-  padding: 4px 10px 10px;
+  padding: 4px 8px 8px;
 }
 
 .git-graph-svg {
@@ -926,13 +921,13 @@ td span,
 
 .commit-list-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.42fr) 62px;
-  gap: 10px;
+  grid-template-columns: minmax(118px, 1.35fr) minmax(96px, 0.9fr) 66px 62px 58px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
   border-bottom: 1px solid rgba(145, 158, 187, 0.08);
   color: #dbe6fa;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .commit-list-row.connector {
@@ -941,8 +936,8 @@ td span,
 }
 
 .commit-list-row.has-commit {
-  padding: 0 8px 0 0;
-  border-radius: 5px;
+  padding: 0 8px;
+  border-radius: 4px;
 }
 
 .commit-list-row.has-commit:hover {
@@ -962,18 +957,13 @@ td span,
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 8px;
+  gap: 6px;
   overflow: hidden;
 }
 
-.commit-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
 .commit-subject,
-.commit-meta,
+.commit-author,
+.commit-date,
 .commit-hash {
   min-width: 0;
   overflow: hidden;
@@ -983,22 +973,19 @@ td span,
 
 .commit-subject {
   color: #eef4ff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
-  line-height: 17px;
 }
 
-.commit-meta {
+.commit-author,
+.commit-date {
   color: #9ca8bd;
-  font-size: 10px;
-  line-height: 12px;
 }
 
 .commit-hash {
   justify-self: end;
   color: #b8f0ff;
   font-size: 11px;
-  opacity: 0.82;
 }
 
 .badge.compact {
@@ -1010,7 +997,7 @@ td span,
 }
 
 .commit-refs-cell .ref-pill {
-  max-width: 128px;
+  max-width: 86px;
   flex: 0 1 auto;
   min-height: 18px;
   padding: 0 6px;
@@ -1770,7 +1757,8 @@ code,
   .two-column,
   .report-layout,
   .ops-layout,
-  .git-layout {
+  .git-layout,
+  .repo-graph-body {
     grid-template-columns: 1fr;
   }
 
@@ -1784,12 +1772,6 @@ code,
 
   .git-playbook-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
-  }
-}
-
-@media (max-width: 1060px) {
-  .repo-graph-body {
-    grid-template-columns: 1fr;
   }
 }
 
