@@ -848,9 +848,30 @@ td span,
 }
 
 .commit-node {
+  --lane-color: #8fe7ff;
+  --lane-line: rgba(143, 231, 255, 0.3);
+  --lane-glow: rgba(143, 231, 255, 0.12);
   display: grid;
   grid-template-columns: 74px minmax(0, 1fr);
   min-height: 76px;
+}
+
+.commit-node.lane-1 {
+  --lane-color: #76efac;
+  --lane-line: rgba(118, 239, 172, 0.3);
+  --lane-glow: rgba(118, 239, 172, 0.12);
+}
+
+.commit-node.lane-2 {
+  --lane-color: #f9c75d;
+  --lane-line: rgba(249, 199, 93, 0.32);
+  --lane-glow: rgba(249, 199, 93, 0.14);
+}
+
+.commit-node.lane-3 {
+  --lane-color: #ff6f9d;
+  --lane-line: rgba(255, 111, 157, 0.3);
+  --lane-glow: rgba(255, 111, 157, 0.12);
 }
 
 .commit-rail {
@@ -865,7 +886,7 @@ td span,
   bottom: 0;
   left: calc(14px + var(--lane) * 14px);
   width: 2px;
-  background: rgba(143, 231, 255, 0.28);
+  background: var(--lane-line);
 }
 
 .commit-rail span {
@@ -874,10 +895,10 @@ td span,
   left: calc(8px + var(--lane) * 14px);
   width: 14px;
   height: 14px;
-  border: 3px solid #8fe7ff;
+  border: 3px solid var(--lane-color);
   border-radius: 999px;
   background: #080d18;
-  box-shadow: 0 0 0 4px rgba(143, 231, 255, 0.1);
+  box-shadow: 0 0 0 4px var(--lane-glow);
 }
 
 .commit-card {
@@ -893,6 +914,11 @@ td span,
 .commit-card.head {
   border-color: rgba(118, 239, 172, 0.3);
   background: rgba(15, 45, 38, 0.38);
+}
+
+.commit-card.merge {
+  border-color: rgba(249, 199, 93, 0.28);
+  background: linear-gradient(135deg, rgba(249, 199, 93, 0.1), rgba(18, 25, 43, 0.74));
 }
 
 .commit-title,

@@ -3466,7 +3466,14 @@ function renderUnavailableWorktree(repo) {
 }
 
 function renderRefPills(refs = []) {
-  const visibleRefs = refs.slice(0, 8);
+  const typeRank = { branch: 1, tag: 2, remote: 3, ref: 4 };
+  const visibleRefs = [...refs]
+    .sort((left, right) => {
+      if (left.is_head && !right.is_head) return -1;
+      if (!left.is_head && right.is_head) return 1;
+      return (typeRank[left.type] || 4) - (typeRank[right.type] || 4);
+    })
+    .slice(0, 12);
   if (!visibleRefs.length) return `<span class="badge muted">no refs</span>`;
   return visibleRefs
     .map((ref) => `<span class="ref-pill ${escapeHtml(ref.type || "ref")}">${escapeHtml(ref.name || ref.full_name || "ref")}</span>`)
@@ -3491,10 +3498,13 @@ function renderCommitGraph(repo) {
 function renderCommitNode(commit) {
   const lane = Math.max(0, Math.min(Number(commit.lane || 0), 3));
   const refs = commit.refs || [];
+  const cardClasses = ["commit-card", commit.is_head ? "head" : "", commit.is_merge ? "merge" : ""]
+    .filter(Boolean)
+    .join(" ");
   return `
-    <article class="commit-node" style="--lane: ${lane}">
+    <article class="commit-node lane-${lane}" style="--lane: ${lane}">
       <div class="commit-rail" aria-hidden="true"><span></span></div>
-      <div class="commit-card ${commit.is_head ? "head" : ""}">
+      <div class="${cardClasses}">
         <div class="commit-title">
           <strong>${escapeHtml(displayValue(commit.subject))}</strong>
           <code>${escapeHtml(displayValue(commit.short_hash || String(commit.hash || "").slice(0, 7)))}</code>

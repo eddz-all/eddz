@@ -6,6 +6,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from database import Base, SessionLocal, engine, migrate_existing_schema
@@ -26,14 +27,30 @@ DEMO_ROOT = Path(os.environ.get("PROJECTPILOT_DEMO_ROOT", Path.home() / "work" /
 PROJECT_PATH = str(DEMO_ROOT)
 PROJECT_NAME = "ProjectPilot Git Workspace Demo"
 SERVER_SPECS = [
+    ("Demo Git Graph Showcase", "showcase-graph"),
     ("Demo Diverged Dirty", "diverged-dirty"),
     ("Demo Merge Conflict", "merge-conflict"),
     ("Demo Detached HEAD", "detached-head"),
     ("Demo Wrong Branch", "wrong-branch"),
 ]
+LEGACY_SERVER_NAMES = [
+    "Demo Diverged Dirty",
+    "Demo Merge Conflict",
+    "Demo Detached HEAD",
+    "Demo Wrong Branch",
+]
+DEMO_START = datetime.now(timezone.utc) - timedelta(days=12)
+COMMIT_SEQUENCE = 0
 
 
-def run(args: list[str], cwd: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run(
+    args: list[str],
+    cwd: Path,
+    *,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    command_env = {**os.environ, **env} if env else None
     return subprocess.run(
         args,
         cwd=str(cwd),
@@ -41,6 +58,7 @@ def run(args: list[str], cwd: Path, *, check: bool = True) -> subprocess.Complet
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=check,
+        env=command_env,
     )
 
 
@@ -55,22 +73,64 @@ def configure_repo(repo: Path) -> None:
     run(["git", "config", "advice.detachedHead", "false"], repo)
 
 
+def commit_env() -> dict[str, str]:
+    global COMMIT_SEQUENCE
+    COMMIT_SEQUENCE += 1
+    timestamp = DEMO_START + timedelta(hours=COMMIT_SEQUENCE * 4)
+    value = timestamp.isoformat(timespec="seconds")
+    return {"GIT_AUTHOR_DATE": value, "GIT_COMMITTER_DATE": value}
+
+
+def commit(repo: Path, message: str, *, add_all: bool = True) -> None:
+    if add_all:
+        run(["git", "add", "-A"], repo)
+    run(["git", "commit", "-m", message], repo, env=commit_env())
+
+
+def merge_no_ff(repo: Path, branch: str, message: str) -> None:
+    run(["git", "merge", "--no-ff", branch, "-m", message], repo, env=commit_env())
+
+
+def push_all(repo: Path) -> None:
+    run(["git", "push", "-u", "origin", "main"], repo)
+    run(["git", "push", "origin", "--all"], repo)
+    run(["git", "push", "origin", "--tags"], repo)
+
+
 def create_base_repo(repo: Path, remote: Path | None = None) -> None:
     repo.mkdir(parents=True, exist_ok=True)
     run(["git", "init", "-b", "main"], repo)
     configure_repo(repo)
-    write(repo / "README.md", "# ProjectPilot Git Demo\n")
-    write(repo / "app.py", "print('hello from demo')\n")
+    write(repo / "README.md", "# ProjectPilot Git Demo\n\nThis repository is generated for Git Workspace demos.\n")
+    write(repo / "app.py", "print('hello from ProjectPilot demo')\n")
     write(repo / ".gitignore", ".env\n*.log\n.DS_Store\ndist/\nbuild/\n__pycache__/\n")
     write(repo / "dist" / "bundle.js", "console.log('tracked generated output v1')\n")
     run(["git", "add", "README.md", "app.py", ".gitignore"], repo)
     run(["git", "add", "-f", "dist/bundle.js"], repo)
-    run(["git", "commit", "-m", "initial demo app"], repo)
+    commit(repo, "initialize ProjectPilot demo shell", add_all=False)
+
+    write(repo / "src" / "health.py", "def health_score():\n    return 92\n")
+    write(repo / "tests" / "test_health.py", "def test_health_score():\n    assert 92 >= 80\n")
+    commit(repo, "add health score model")
+
+    run(["git", "switch", "-c", "feature/git-workspace"], repo)
+    write(repo / "src" / "git_workspace.py", "def summarize_repo(name):\n    return f'{name}: ready for graph view'\n")
+    commit(repo, "add Git workspace summary model")
+    write(repo / "docs" / "git-workspace.md", "Git Workspace renders branch state, refs, and worktree groups.\n")
+    commit(repo, "document Git workspace graph")
+
+    run(["git", "switch", "main"], repo)
+    write(repo / "docs" / "operations.md", "Read operations are local. Write operations require executor approval.\n")
+    commit(repo, "document executor approval boundary")
+    merge_no_ff(repo, "feature/git-workspace", "merge Git workspace graph model")
+    run(["git", "tag", "-a", "v0.1.0", "-m", "ProjectPilot demo baseline"], repo)
+    run(["git", "branch", "release/demo-ready"], repo)
+
     if remote is not None:
         remote.parent.mkdir(parents=True, exist_ok=True)
         run(["git", "init", "--bare", str(remote)], repo)
         run(["git", "remote", "add", "origin", str(remote)], repo)
-        run(["git", "push", "-u", "origin", "main"], repo)
+        push_all(repo)
         run(["git", "symbolic-ref", "HEAD", "refs/heads/main"], remote)
 
 
@@ -79,8 +139,27 @@ def create_remote_commit(remote: Path, relative_path: str, content: str, message
     configure_repo(peer)
     write(peer / relative_path, content)
     run(["git", "add", relative_path], peer)
-    run(["git", "commit", "-m", message], peer)
+    commit(peer, message, add_all=False)
     run(["git", "push", "origin", "main"], peer)
+
+
+def create_showcase_workspace(workspaces: Path, remotes: Path) -> Path:
+    repo = workspaces / "showcase-graph"
+    remote = remotes / "showcase-graph.git"
+    create_base_repo(repo, remote)
+    run(["git", "switch", "-c", "feature/graph-polish"], repo)
+    write(repo / "src" / "graph_palette.py", "LANES = ['main', 'feature', 'release', 'remote']\n")
+    commit(repo, "add graph lane palette")
+    write(repo / "src" / "graph_layout.py", "def lane_count(commits):\n    return min(4, max(1, commits))\n")
+    commit(repo, "add adaptive graph layout")
+    run(["git", "switch", "main"], repo)
+    write(repo / "docs" / "release-notes.md", "ProjectPilot demo now highlights refs, tags, merges, and worktree state.\n")
+    commit(repo, "prepare graph demo release notes")
+    merge_no_ff(repo, "feature/graph-polish", "merge polished Git graph presentation")
+    run(["git", "tag", "-a", "v0.2.0", "-m", "Graph showcase release"], repo)
+    run(["git", "branch", "release/v0.2-showcase"], repo)
+    push_all(repo)
+    return repo
 
 
 def create_diverged_dirty_workspace(workspaces: Path, remotes: Path, peers: Path) -> Path:
@@ -91,10 +170,13 @@ def create_diverged_dirty_workspace(workspaces: Path, remotes: Path, peers: Path
     run(["git", "fetch", "origin"], repo)
     write(repo / "local.txt", "local side change\n")
     run(["git", "add", "local.txt"], repo)
-    run(["git", "commit", "-m", "local side change"], repo)
+    commit(repo, "local side change", add_all=False)
     write(repo / "app.py", "print('dirty local draft')\n")
     write(repo / ".env", "PROJECTPILOT_TOKEN=demo-secret\n")
     write(repo / "dist" / "bundle.js", "console.log('tracked generated output v2')\n")
+    write(repo / "docs" / "local-plan.md", "Draft commit plan awaiting approval.\n")
+    run(["git", "add", "docs/local-plan.md"], repo)
+    write(repo / "scratch" / "manual-checklist.md", "Untracked checklist for the demo operator.\n")
     return repo
 
 
@@ -103,10 +185,12 @@ def create_conflict_workspace(workspaces: Path) -> Path:
     create_base_repo(repo)
     run(["git", "switch", "-c", "feature/conflict"], repo)
     write(repo / "app.py", "print('feature branch change')\n")
-    run(["git", "commit", "-am", "feature branch change"], repo)
+    run(["git", "add", "app.py"], repo)
+    commit(repo, "feature branch change", add_all=False)
     run(["git", "switch", "main"], repo)
     write(repo / "app.py", "print('main branch change')\n")
-    run(["git", "commit", "-am", "main branch change"], repo)
+    run(["git", "add", "app.py"], repo)
+    commit(repo, "main branch change", add_all=False)
     run(["git", "merge", "feature/conflict"], repo, check=False)
     return repo
 
@@ -114,7 +198,8 @@ def create_conflict_workspace(workspaces: Path) -> Path:
 def create_detached_workspace(workspaces: Path) -> Path:
     repo = workspaces / "detached-head"
     create_base_repo(repo)
-    run(["git", "checkout", "--detach", "HEAD"], repo)
+    run(["git", "tag", "-a", "inspection-point", "-m", "Detached inspection point"], repo)
+    run(["git", "checkout", "--detach", "HEAD~2"], repo)
     write(repo / "detached-note.md", "work created while detached\n")
     return repo
 
@@ -124,8 +209,9 @@ def create_wrong_branch_workspace(workspaces: Path) -> Path:
     create_base_repo(repo)
     run(["git", "switch", "-c", "feature/wrong-target"], repo)
     write(repo / "feature.py", "print('work on the wrong branch')\n")
-    run(["git", "add", "feature.py"], repo)
-    run(["git", "commit", "-m", "work on wrong branch"], repo)
+    commit(repo, "start work on wrong branch")
+    write(repo / "docs" / "branch-notes.md", "This work should move back to main after review.\n")
+    commit(repo, "add branch migration notes")
     return repo
 
 
@@ -139,6 +225,7 @@ def recreate_demo_workspaces() -> dict[str, Path]:
     remotes.mkdir(parents=True)
     peers.mkdir(parents=True)
     return {
+        "showcase-graph": create_showcase_workspace(workspaces, remotes),
         "diverged-dirty": create_diverged_dirty_workspace(workspaces, remotes, peers),
         "merge-conflict": create_conflict_workspace(workspaces),
         "detached-head": create_detached_workspace(workspaces),
@@ -148,7 +235,7 @@ def recreate_demo_workspaces() -> dict[str, Path]:
 
 def clear_existing_demo(db) -> None:
     project = db.query(Project).filter(Project.path == PROJECT_PATH).first()
-    server_names = [name for name, _ in SERVER_SPECS]
+    server_names = sorted({name for name, _ in SERVER_SPECS} | set(LEGACY_SERVER_NAMES))
     servers = db.query(Server).filter(Server.name.in_(server_names)).all()
     project_ids = [project.id] if project is not None else []
     server_ids = [server.id for server in servers]

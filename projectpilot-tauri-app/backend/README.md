@@ -11,6 +11,10 @@ python seed.py
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+`python seed.py` rebuilds `/Users/eddz/work/projectpilot-demo` and registers
+those local repositories in the backend. The generated repositories are intended
+for Git Workspace screenshots and demos.
+
 健康检查：
 
 ```text

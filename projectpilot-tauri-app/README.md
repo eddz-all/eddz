@@ -33,6 +33,11 @@ npm run seed:backend
 npm run dev:backend
 ```
 
+`npm run seed:backend` rebuilds the local Git demo workspace at
+`/Users/eddz/work/projectpilot-demo`. It creates multiple local repositories
+with merge commits, feature branches, tags, diverged history, dirty files,
+conflicts, detached HEAD, and wrong-branch states for Git Workspace demos.
+
 The local backend runs at:
 
 ```text
