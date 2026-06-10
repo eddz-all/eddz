@@ -1,0 +1,91 @@
+.gitkraken-graph-shell {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(145, 158, 187, 0.12);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 0 8%, rgba(143, 231, 255, 0.08), transparent 26%),
+    rgba(6, 11, 22, 0.42);
+}
+
+.gitkraken-graph-mount {
+  display: none;
+  width: 100%;
+  height: var(--gitkraken-graph-height, 460px);
+  min-height: 360px;
+  overflow: hidden;
+  contain: paint;
+}
+
+.gitkraken-graph-mounted .gitkraken-graph-mount {
+  display: block;
+}
+
+.gitkraken-graph-mounted .gitkraken-graph-static-fallback {
+  display: none;
+}
+
+.gitkraken-graph-error .gitkraken-graph-static-fallback,
+.gitkraken-graph-static-fallback {
+  display: block;
+}
+
+.gitkraken-graph-mount .gk-graph {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  --app__bg0: rgba(6, 11, 22, 0.88);
+  --panel__bg0: rgba(9, 15, 29, 0.92);
+  --panel__bg1: rgba(13, 21, 38, 0.96);
+  --panel__bg2: rgba(18, 29, 50, 0.96);
+  --section-border: rgba(145, 158, 187, 0.14);
+  --text-selected: #eef4ff;
+  --text-normal: rgba(219, 230, 250, 0.86);
+  --text-secondary: rgba(156, 168, 189, 0.92);
+  --text-disabled: rgba(156, 168, 189, 0.5);
+  --text-accent: #8fe7ff;
+  --link-color: #8fe7ff;
+  --selected-row: rgba(79, 70, 229, 0.22);
+  --hover-row: rgba(145, 158, 187, 0.08);
+  --input__bg: rgba(2, 6, 15, 0.7);
+  --scroll-thumb-bg: rgba(145, 158, 187, 0.32);
+  --graph-color-0: #8fe7ff;
+  --graph-color-1: #76efac;
+  --graph-color-2: #f9c75d;
+  --graph-color-3: #ff7aa8;
+  --graph-color-4: #9f8cff;
+  --graph-color-0-bg25: rgba(143, 231, 255, 0.18);
+  --graph-color-1-bg25: rgba(118, 239, 172, 0.18);
+  --graph-color-2-bg25: rgba(249, 199, 93, 0.18);
+  --graph-color-3-bg25: rgba(255, 122, 168, 0.18);
+  --graph-color-4-bg25: rgba(159, 140, 255, 0.18);
+  --graph-color-0-bg45: rgba(143, 231, 255, 0.28);
+  --graph-color-1-bg45: rgba(118, 239, 172, 0.28);
+  --graph-color-2-bg45: rgba(249, 199, 93, 0.28);
+  --graph-color-3-bg45: rgba(255, 122, 168, 0.28);
+  --graph-color-4-bg45: rgba(159, 140, 255, 0.28);
+  --graph-color-0-bg50: rgba(143, 231, 255, 0.34);
+  --graph-color-1-bg50: rgba(118, 239, 172, 0.34);
+  --graph-color-2-bg50: rgba(249, 199, 93, 0.34);
+  --graph-color-3-bg50: rgba(255, 122, 168, 0.34);
+  --graph-color-4-bg50: rgba(159, 140, 255, 0.34);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.gitkraken-graph-mount .graph-adjust-commit-count {
+  display: none;
+}
+
+.gitkraken-graph-mount .gk-graph span.absolute:has(.graph-adjust-commit-count) {
+  display: none;
+}
+
+.gitkraken-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.82;
+}
