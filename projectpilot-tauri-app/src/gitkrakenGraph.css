@@ -19,6 +19,8 @@
   min-height: 300px;
   overflow: hidden;
   contain: paint;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .gitkraken-graph-mounted .gitkraken-graph-mount {
@@ -84,6 +86,20 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 12px;
   line-height: 18px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.gitkraken-graph-mount .gk-graph *,
+.gitkraken-graph-mount .gk-graph *::before,
+.gitkraken-graph-mount .gk-graph *::after {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+.gitkraken-graph-mount .gk-graph ::selection {
+  background: transparent;
+  color: inherit;
 }
 
 .gitkraken-graph-mount .gk-graph .h1,
@@ -182,14 +198,38 @@
 .gitkraken-graph-mount .gk-graph .ref-nodes,
 .gitkraken-graph-mount .gk-graph .ref-node-wrapper {
   align-items: center !important;
+  flex: 0 1 auto !important;
+  width: max-content !important;
   min-width: 0 !important;
   max-width: 100% !important;
   height: 18px !important;
   overflow: hidden !important;
+  color: rgba(219, 230, 250, 0.92) !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.gitkraken-graph-mount .gk-graph .ref-zone .inline,
+.gitkraken-graph-mount .gk-graph .ref-zone > .flex *,
+.gitkraken-graph-mount .gk-graph .ref-nodes * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: rgba(219, 230, 250, 0.92) !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .gitkraken-graph-mount .gk-graph .ref-zone .ref-node,
-.gitkraken-graph-mount .gk-graph.ref-zone .ref-node {
+.gitkraken-graph-mount .gk-graph.ref-zone .ref-node,
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-node:hover,
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-node:focus,
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-node.has-active,
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-node.is-active {
   box-sizing: border-box !important;
   max-width: 100% !important;
   height: 18px !important;
