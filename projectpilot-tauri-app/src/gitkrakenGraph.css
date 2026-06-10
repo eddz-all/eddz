@@ -172,31 +172,74 @@
   display: none;
 }
 
-.gitkraken-graph-mount .ref-zone {
-  align-items: center;
+.gitkraken-graph-mount .gk-graph .ref-zone,
+.gitkraken-graph-mount .gk-graph.ref-zone {
+  align-items: center !important;
+  overflow: hidden !important;
 }
 
-.gitkraken-graph-mount .ref-node {
-  min-height: 18px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 16px;
+.gitkraken-graph-mount .gk-graph .ref-zone > .flex,
+.gitkraken-graph-mount .gk-graph .ref-nodes,
+.gitkraken-graph-mount .gk-graph .ref-node-wrapper {
+  align-items: center !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 18px !important;
+  overflow: hidden !important;
 }
 
-.gitkraken-graph-mount .ref-name {
-  font-size: 11px;
-  line-height: 16px;
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-node,
+.gitkraken-graph-mount .gk-graph.ref-zone .ref-node {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  padding: 0 7px !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  color: rgba(219, 230, 250, 0.92) !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-node *,
+.gitkraken-graph-mount .gk-graph.ref-zone .ref-node * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.gitkraken-graph-mount .gk-graph .ref-zone .ref-name,
+.gitkraken-graph-mount .gk-graph.ref-zone .ref-name {
+  display: block !important;
+  overflow: hidden !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .gitkraken-graph-mount .gk-graph .ref-zone .overflow-count,
 .gitkraken-graph-mount .gk-graph.ref-zone .overflow-count,
 .gitkraken-graph-mount .overflow-count {
+  box-sizing: border-box;
+  height: 18px !important;
   min-height: 18px;
+  max-height: 18px;
   padding: 0 6px;
   border-radius: 999px;
+  overflow: hidden;
   font-size: 11px !important;
   line-height: 16px !important;
+  white-space: nowrap;
 }
 
 .gitkraken-graph-mount #commit-sha-zone .graph-row {
