@@ -3651,18 +3651,21 @@ function renderUnavailableWorktree(repo) {
 
 function renderRefPills(refs = [], options = {}) {
   const showEmpty = options.showEmpty !== false;
+  const limit = Number(options.limit || 12);
   const typeRank = { branch: 1, tag: 2, remote: 3, ref: 4 };
-  const visibleRefs = [...refs]
+  const sortedRefs = [...refs]
     .sort((left, right) => {
       if (left.is_head && !right.is_head) return -1;
       if (!left.is_head && right.is_head) return 1;
       return (typeRank[left.type] || 4) - (typeRank[right.type] || 4);
-    })
-    .slice(0, 12);
+    });
+  const visibleRefs = sortedRefs.slice(0, limit);
   if (!visibleRefs.length) return showEmpty ? `<span class="badge muted">no refs</span>` : "";
-  return visibleRefs
+  const hiddenCount = Math.max(0, sortedRefs.length - visibleRefs.length);
+  const pills = visibleRefs
     .map((ref) => `<span class="ref-pill ${escapeHtml(ref.type || "ref")}">${escapeHtml(ref.name || ref.full_name || "ref")}</span>`)
     .join("");
+  return hiddenCount ? `${pills}<span class="ref-pill more">+${hiddenCount}</span>` : pills;
 }
 
 function renderCommitGraph(repo) {
@@ -3755,14 +3758,14 @@ function renderCommitGraphRow(row, index, totalRows) {
           <span>${escapeHtml(displayValue(commit.relative_time))}</span>
           ${commit.is_merge ? `<span class="badge warning">merge</span>` : ""}
         </div>
-        ${refs.length ? `<div class="ref-row">${renderRefPills(refs, { showEmpty: false })}</div>` : ""}
+        ${refs.length ? `<div class="ref-row">${renderRefPills(refs, { showEmpty: false, limit: 3 })}</div>` : ""}
       </div>
     </article>
   `;
 }
 
 function renderGraphLanes(value) {
-  const laneCount = 6;
+  const laneCount = 4;
   const lanes = Array.from({ length: laneCount }, () => ({
     active: false,
     node: false,
