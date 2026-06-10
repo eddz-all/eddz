@@ -109,7 +109,7 @@ On the server-b Ubuntu VM, start the built-in executor profile explicitly:
 Executor profile:
 
 ```text
-server_url: https://printable-played-chances-response.trycloudflare.com
+server_url: https://functioning-element-pushing-whenever.trycloudflare.com
 executor_id: server-b
 allowed_root: /home/hzy
 project_path: /home/hzy/project/web

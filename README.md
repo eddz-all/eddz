@@ -226,7 +226,7 @@ projectpilot executor server-b
 The built-in profile uses:
 
 ```text
-server_url: https://unique-painted-runner-last.trycloudflare.com
+server_url: https://functioning-element-pushing-whenever.trycloudflare.com
 executor_id: server-b
 allowed_root: /home/hzy
 project_path: /home/hzy/project/web
@@ -338,7 +338,7 @@ Use the task publisher when a backend operator wants to queue executor work from
 
 ```bash
 projectpilot executor publish \
-  --server-url https://unique-painted-runner-last.trycloudflare.com \
+  --server-url https://functioning-element-pushing-whenever.trycloudflare.com \
   --token dev-token \
   --executor-id server-b \
   --project-path /home/hzy/project/web \
@@ -351,7 +351,7 @@ For the teammate backend's existing project/server binding flow, trigger detecti
 
 ```bash
 projectpilot executor publish \
-  --server-url https://unique-painted-runner-last.trycloudflare.com \
+  --server-url https://functioning-element-pushing-whenever.trycloudflare.com \
   --token dev-token \
   --mode project-detect \
   --project-id 1 \

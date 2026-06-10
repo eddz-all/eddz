@@ -204,7 +204,7 @@ async function setE2eStorage(cdp) {
     expression: `
       localStorage.setItem("projectpilot.session", JSON.stringify({ email: "e2e@projectpilot.local", name: "E2E Operator" }));
       localStorage.setItem("projectpilot.apiBase", "http://127.0.0.1:9");
-      localStorage.setItem("projectpilot.apiBaseVersion", "20260609-cloudflare-unique-painted");
+      localStorage.setItem("projectpilot.apiBaseVersion", "20260610-cloudflare-functioning-element");
       localStorage.removeItem("projectpilot.localDemo.v1");
       true;
     `,

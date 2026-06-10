@@ -68,7 +68,7 @@ class BackendProfile:
 
 
 DEFAULT_BACKEND_PROFILE = BackendProfile(
-    server_url="https://unique-painted-runner-last.trycloudflare.com",
+    server_url="https://functioning-element-pushing-whenever.trycloudflare.com",
     token="dev-token",
     default_project_id=1,
     default_server_id=2,

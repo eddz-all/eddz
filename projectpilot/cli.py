@@ -87,7 +87,7 @@ from projectpilot.models.git_status import GitStatus
 from projectpilot.models.operation_plan import OperationPlan, OperationResult
 
 SERVER_B_EXECUTOR_PROFILE = {
-    "server_url": "https://unique-painted-runner-last.trycloudflare.com",
+    "server_url": "https://functioning-element-pushing-whenever.trycloudflare.com",
     "token": "dev-token",
     "executor_id": "server-b",
     "allowed_root": "/home/hzy",

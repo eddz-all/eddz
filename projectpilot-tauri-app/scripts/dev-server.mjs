@@ -8,7 +8,7 @@ const root = resolve(process.argv[2] || ".");
 const port = Number(process.env.PORT || 5173);
 const host = "127.0.0.1";
 const proxyPrefix = "/api";
-const defaultApiUpstream = "https://unique-painted-runner-last.trycloudflare.com";
+const defaultApiUpstream = "https://functioning-element-pushing-whenever.trycloudflare.com";
 
 const mime = {
   ".html": "text/html; charset=utf-8",
