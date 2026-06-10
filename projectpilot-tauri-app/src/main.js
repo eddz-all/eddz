@@ -1229,7 +1229,14 @@ function localDemoGraphForSlug(slug) {
       "| * 60802ca add graph lane palette",
       "* | 412da6d prepare graph demo release notes",
       "|/",
-      "*   8001233 (tag: v0.1.0, release/demo-ready) merge Git workspace graph model"
+      "*   8001233 (tag: v0.1.0, release/demo-ready) merge Git workspace graph model",
+      "|\\",
+      "| * c41500e (feature/git-workspace, origin/feature/git-workspace) document Git workspace graph",
+      "| * ac7a1fc add Git workspace summary model",
+      "* | f3a24c7 document executor approval boundary",
+      "|/",
+      "* 45811df add health score model",
+      "* e77c1b0 initialize ProjectPilot demo shell"
     ]
   };
 }
@@ -1242,9 +1249,8 @@ function localGitWorktree(data, projectId) {
     const git = server.latest_git_status || {};
     const slug = String(server.project_path || "").split("/").pop();
     const demoGraph = localDemoGraphForSlug(slug);
-    const seed = `${projectId}${server.server_id}${index}`;
-    const headHash = `local${seed}head000000000000000000000000000000`.slice(0, 40);
-    const parentHash = `local${seed}base000000000000000000000000000000`.slice(0, 40);
+    const headHash = `${(0xa100000 + index).toString(16)}${"0".repeat(33)}`;
+    const parentHash = `${(0xb100000 + index).toString(16)}${"0".repeat(33)}`;
     const createdAt = parseTimestamp(git.created_at);
     const ageMinutes = createdAt ? Math.max(2, Math.round((now - createdAt) / 60000)) : 8 + index;
     const refs = git.branch
@@ -3643,7 +3649,8 @@ function renderUnavailableWorktree(repo) {
   `;
 }
 
-function renderRefPills(refs = []) {
+function renderRefPills(refs = [], options = {}) {
+  const showEmpty = options.showEmpty !== false;
   const typeRank = { branch: 1, tag: 2, remote: 3, ref: 4 };
   const visibleRefs = [...refs]
     .sort((left, right) => {
@@ -3652,7 +3659,7 @@ function renderRefPills(refs = []) {
       return (typeRank[left.type] || 4) - (typeRank[right.type] || 4);
     })
     .slice(0, 12);
-  if (!visibleRefs.length) return `<span class="badge muted">no refs</span>`;
+  if (!visibleRefs.length) return showEmpty ? `<span class="badge muted">no refs</span>` : "";
   return visibleRefs
     .map((ref) => `<span class="ref-pill ${escapeHtml(ref.type || "ref")}">${escapeHtml(ref.name || ref.full_name || "ref")}</span>`)
     .join("");
@@ -3666,22 +3673,72 @@ function renderCommitGraph(repo) {
   if (!commits.length) {
     return `<p class="muted-copy">No commits returned for this repository.</p>`;
   }
+  const rows = commitGraphRows(repo, commits);
   return `
-    <div class="commit-graph" style="--lane-count: 4">
-      ${commits.map(renderCommitNode).join("")}
+    <div class="commit-graph topology">
+      ${rows.map(renderCommitGraphRow).join("")}
     </div>
   `;
 }
 
-function renderCommitNode(commit) {
-  const lane = Math.max(0, Math.min(Number(commit.lane || 0), 3));
+function commitGraphRows(repo, commits) {
+  const rows = [];
+  const usedHashes = new Set();
+  const graphLines = Array.isArray(repo.graph_text) ? repo.graph_text : [];
+
+  graphLines.slice(0, 36).forEach((line) => {
+    const match = commits.find((commit) => {
+      const shortHash = String(commit.short_hash || String(commit.hash || "").slice(0, 7));
+      return shortHash && !usedHashes.has(shortHash) && String(line).includes(shortHash);
+    });
+    if (match) {
+      const shortHash = String(match.short_hash || String(match.hash || "").slice(0, 7));
+      usedHashes.add(shortHash);
+      rows.push({
+        graph: String(line).slice(0, String(line).indexOf(shortHash)),
+        commit: match,
+        connector: false
+      });
+    } else if (String(line).trim()) {
+      rows.push({
+        graph: String(line),
+        commit: null,
+        connector: true
+      });
+    }
+  });
+
+  commits.forEach((commit) => {
+    const shortHash = String(commit.short_hash || String(commit.hash || "").slice(0, 7));
+    if (!usedHashes.has(shortHash)) {
+      rows.push({
+        graph: `${" ".repeat(Math.max(0, Math.min(Number(commit.lane || 0), 3)) * 2)}* `,
+        commit,
+        connector: false
+      });
+    }
+  });
+
+  return rows;
+}
+
+function renderCommitGraphRow(row) {
+  const commit = row.commit;
+  if (!commit) {
+    return `
+      <div class="commit-graph-row connector">
+        <div class="graph-ascii" aria-hidden="true">${renderGraphGlyphs(row.graph)}</div>
+        <div></div>
+      </div>
+    `;
+  }
   const refs = commit.refs || [];
   const cardClasses = ["commit-card", commit.is_head ? "head" : "", commit.is_merge ? "merge" : ""]
     .filter(Boolean)
     .join(" ");
   return `
-    <article class="commit-node lane-${lane}" style="--lane: ${lane}">
-      <div class="commit-rail" aria-hidden="true"><span></span></div>
+    <article class="commit-graph-row has-commit">
+      <div class="graph-ascii" aria-hidden="true">${renderGraphGlyphs(row.graph || "* ")}</div>
       <div class="${cardClasses}">
         <div class="commit-title">
           <strong>${escapeHtml(displayValue(commit.subject))}</strong>
@@ -3692,10 +3749,36 @@ function renderCommitNode(commit) {
           <span>${escapeHtml(displayValue(commit.relative_time))}</span>
           ${commit.is_merge ? `<span class="badge warning">merge</span>` : ""}
         </div>
-        <div class="ref-row">${renderRefPills(refs)}</div>
+        ${refs.length ? `<div class="ref-row">${renderRefPills(refs, { showEmpty: false })}</div>` : ""}
       </div>
     </article>
   `;
+}
+
+function renderGraphGlyphs(value) {
+  const graph = String(value || "* ").padEnd(4, " ");
+  return [...graph].slice(0, 22).map((char, index) => {
+    const lane = Math.max(0, Math.min(Math.floor(index / 2), 5));
+    const glyph = {
+      " ": "&nbsp;",
+      "*": "●",
+      "|": "│",
+      "/": "╱",
+      "\\": "╲",
+      "_": "─",
+      "-": "─"
+    }[char] || escapeHtml(char);
+    const type = {
+      " ": "space",
+      "*": "dot",
+      "|": "pipe edge",
+      "/": "slash edge",
+      "\\": "backslash edge",
+      "_": "dash edge",
+      "-": "dash edge"
+    }[char] || "label";
+    return `<span class="graph-glyph lane-${lane} ${type}">${glyph}</span>`;
+  }).join("");
 }
 
 function uniquePaths(paths = []) {
