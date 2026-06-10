@@ -1227,6 +1227,15 @@ td span,
   gap: 18px;
 }
 
+.bindings-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.bindings-layout .bind-server-panel {
+  max-width: 760px;
+}
+
 .panel {
   min-width: 0;
   padding: 18px;
@@ -1275,48 +1284,49 @@ table {
 }
 
 .bindings-table {
-  min-width: 0;
+  min-width: 1240px;
   table-layout: fixed;
 }
 
 .bindings-table th:nth-child(1),
 .bindings-table td:nth-child(1) {
-  width: 14%;
+  width: 190px;
 }
 
 .bindings-table th:nth-child(2),
 .bindings-table td:nth-child(2) {
-  width: 16%;
+  width: 150px;
 }
 
 .bindings-table th:nth-child(3),
 .bindings-table td:nth-child(3) {
-  width: 8%;
+  width: 110px;
 }
 
 .bindings-table th:nth-child(4),
 .bindings-table td:nth-child(4) {
-  width: 12%;
+  width: 96px;
 }
 
 .bindings-table th:nth-child(5),
 .bindings-table td:nth-child(5) {
-  width: 27%;
+  width: 380px;
 }
 
 .bindings-table th:nth-child(6),
 .bindings-table td:nth-child(6) {
-  width: 9%;
+  width: 128px;
 }
 
 .bindings-table th:nth-child(7),
 .bindings-table td:nth-child(7) {
-  width: 14%;
+  width: 186px;
 }
 
 .bindings-table td,
 .bindings-table th {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .bindings-table .badge {
@@ -1326,10 +1336,14 @@ table {
   word-break: normal;
 }
 
+.bindings-table td:nth-child(1) strong,
+.bindings-table td:nth-child(1) span,
 .bindings-table th:nth-child(2),
 .bindings-table td:nth-child(2),
 .bindings-table th:nth-child(3),
-.bindings-table td:nth-child(3) {
+.bindings-table td:nth-child(3),
+.bindings-table th:nth-child(6),
+.bindings-table td:nth-child(6) {
   overflow: hidden;
   overflow-wrap: normal;
   text-overflow: ellipsis;
@@ -1337,11 +1351,21 @@ table {
 }
 
 .bindings-table td code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: normal;
   white-space: normal;
+  word-break: normal;
 }
 
 .bindings-table .row-actions {
+  flex-wrap: nowrap;
   justify-content: flex-start;
+}
+
+.bindings-table .row-actions button {
+  min-width: 78px;
+  white-space: nowrap;
 }
 
 .dashboard-table-wrap {

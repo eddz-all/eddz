@@ -324,11 +324,50 @@ function localTimestamp(minutesAgo = 0) {
   return new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
 }
 
+function localDemoWorktreeForSlug(slug) {
+  if (slug !== "showcase-graph") return null;
+  return {
+    staged_files: [
+      "src/git-workspace/GraphCanvas.tsx",
+      "docs/git-workspace-demo.md"
+    ],
+    unstaged_files: [
+      "src/main.js",
+      "src/gitkrakenGraph.css",
+      "src/styles.css"
+    ],
+    untracked_files: [
+      "notes/demo-recording-checklist.md"
+    ],
+    conflicted_files: []
+  };
+}
+
+function cloneFileList(value) {
+  return Array.isArray(value) ? [...value] : [];
+}
+
+function gitChangedFilesFromWorktree(stagedFiles, unstagedFiles, untrackedFiles, conflictedFiles) {
+  return [
+    ...cloneFileList(stagedFiles).map((path) => ({ path, index_status: "A", worktree_status: "." })),
+    ...cloneFileList(unstagedFiles).map((path) => ({ path, index_status: ".", worktree_status: "M" })),
+    ...cloneFileList(untrackedFiles).map((path) => ({ path, index_status: "?", worktree_status: "?" })),
+    ...cloneFileList(conflictedFiles).map((path) => ({ path, index_status: "U", worktree_status: "U" }))
+  ];
+}
+
+function hasWorktreeFiles(status = {}) {
+  return ["staged_files", "unstaged_files", "untracked_files", "conflicted_files"].some(
+    (key) => Array.isArray(status[key]) && status[key].length > 0
+  );
+}
+
 function defaultLocalDemoData() {
   const createdAt = localTimestamp(42);
   const scannedAt = localTimestamp(7);
   const demoRoot = "/Users/eddz/work/projectpilot-demo";
   const workspaceRoot = `${demoRoot}/workspaces`;
+  const showcaseWorktree = localDemoWorktreeForSlug("showcase-graph");
   const demoRepositories = [
     {
       id: 1,
@@ -337,10 +376,14 @@ function defaultLocalDemoData() {
       branch: "main",
       ahead: 0,
       behind: 0,
-      dirty: false,
-      state: "normal",
+      dirty: true,
+      state: "dirty",
       last_commit: "371c655 merge polished Git graph presentation",
-      disk_usage: "58%"
+      disk_usage: "58%",
+      staged_files: showcaseWorktree.staged_files,
+      unstaged_files: showcaseWorktree.unstaged_files,
+      untracked_files: showcaseWorktree.untracked_files,
+      conflicted_files: showcaseWorktree.conflicted_files
     },
     {
       id: 2,
@@ -455,12 +498,7 @@ function defaultLocalDemoData() {
         untracked_files: untracked,
         conflicted_files: conflicted,
         conflicted_count: conflicted.length,
-        changed_files: [
-          ...staged.map((path) => ({ path, index_status: "A", worktree_status: "." })),
-          ...unstaged.map((path) => ({ path, index_status: ".", worktree_status: "M" })),
-          ...untracked.map((path) => ({ path, index_status: "?", worktree_status: "?" })),
-          ...conflicted.map((path) => ({ path, index_status: "U", worktree_status: "U" }))
-        ],
+        changed_files: gitChangedFilesFromWorktree(staged, unstaged, untracked, conflicted),
         created_at: scannedAt
       };
     }),
@@ -556,6 +594,37 @@ function defaultLocalDemoData() {
   };
 }
 
+function applyLocalDemoMigrations(data) {
+  const showcaseBinding = data.bindings.find((binding) =>
+    String(binding.project_path || "").endsWith("/showcase-graph")
+  );
+  const showcaseWorktree = localDemoWorktreeForSlug("showcase-graph");
+  if (!showcaseBinding || !showcaseWorktree) return data;
+
+  const status = data.gitStatuses.find((item) =>
+    Number(item.project_id) === Number(showcaseBinding.project_id) &&
+    Number(item.server_id) === Number(showcaseBinding.server_id)
+  );
+  if (!status || hasWorktreeFiles(status)) return data;
+
+  status.staged_files = cloneFileList(showcaseWorktree.staged_files);
+  status.unstaged_files = cloneFileList(showcaseWorktree.unstaged_files);
+  status.untracked_files = cloneFileList(showcaseWorktree.untracked_files);
+  status.conflicted_files = cloneFileList(showcaseWorktree.conflicted_files);
+  status.conflicted_count = status.conflicted_files.length;
+  status.changed_files = gitChangedFilesFromWorktree(
+    status.staged_files,
+    status.unstaged_files,
+    status.untracked_files,
+    status.conflicted_files
+  );
+  status.has_uncommitted_changes = true;
+  if (!status.state || status.state === "normal") {
+    status.state = "dirty";
+  }
+  return data;
+}
+
 function ensureLocalDemoData(value) {
   const fallback = defaultLocalDemoData();
   const data = value && typeof value === "object" ? { ...fallback, ...value } : fallback;
@@ -596,7 +665,7 @@ function ensureLocalDemoData(value) {
     ) + 1
   );
 
-  return data;
+  return applyLocalDemoMigrations(data);
 }
 
 function readLocalDemoData() {
@@ -1259,6 +1328,7 @@ function localGitWorktree(data, projectId) {
     const git = server.latest_git_status || {};
     const slug = String(server.project_path || "").split("/").pop();
     const demoGraph = localDemoGraphForSlug(slug);
+    const demoWorktree = localDemoWorktreeForSlug(slug);
     const headHash = `${(0xa100000 + index).toString(16)}${"0".repeat(33)}`;
     const parentHash = `${(0xb100000 + index).toString(16)}${"0".repeat(33)}`;
     const createdAt = parseTimestamp(git.created_at);
@@ -1276,10 +1346,28 @@ function localGitWorktree(data, projectId) {
         ]
       : [];
     const changedFiles = git.has_uncommitted_changes ? ["src/app.js", ".env.local"] : [];
-    const stagedFiles = git.staged_files || [];
-    const unstagedFiles = git.unstaged_files || changedFiles;
-    const untrackedFiles = git.untracked_files || [];
-    const conflictedFiles = git.conflicted_files || [];
+    const stagedFiles = hasWorktreeFiles({ staged_files: git.staged_files })
+      ? git.staged_files
+      : cloneFileList(demoWorktree?.staged_files);
+    const unstagedFiles = hasWorktreeFiles({ unstaged_files: git.unstaged_files })
+      ? git.unstaged_files
+      : cloneFileList(demoWorktree?.unstaged_files || changedFiles);
+    const untrackedFiles = hasWorktreeFiles({ untracked_files: git.untracked_files })
+      ? git.untracked_files
+      : cloneFileList(demoWorktree?.untracked_files);
+    const conflictedFiles = hasWorktreeFiles({ conflicted_files: git.conflicted_files })
+      ? git.conflicted_files
+      : cloneFileList(demoWorktree?.conflicted_files);
+    const worktreeDirty = Boolean(
+      git.has_uncommitted_changes ||
+      stagedFiles.length ||
+      unstagedFiles.length ||
+      untrackedFiles.length ||
+      conflictedFiles.length
+    );
+    const changedFileRecords = Array.isArray(git.changed_files) && git.changed_files.length
+      ? git.changed_files
+      : gitChangedFilesFromWorktree(stagedFiles, unstagedFiles, untrackedFiles, conflictedFiles);
     const graphRefs = demoGraph?.refs || refs;
     const graphCommits = demoGraph?.commits || [
       {
@@ -1321,24 +1409,19 @@ function localGitWorktree(data, projectId) {
       commit: demoGraph?.commit || headHash,
       ahead: Number(git.ahead || 0),
       behind: Number(git.behind || 0),
-      state: git.state || (git.has_uncommitted_changes ? "dirty" : "normal"),
+      state: git.state || (worktreeDirty ? "dirty" : "normal"),
       remote_urls: git.remote_url ? [git.remote_url] : [],
       refs: graphRefs,
       commits: graphCommits,
       graph_text: demoGraph?.graph_text || [`* ${headHash.slice(0, 7)} (${git.branch || "detached"}) ${git.last_commit || "Local demo HEAD"}`, `* ${parentHash.slice(0, 7)} Baseline workspace state`],
       worktree: {
-        is_clean: !git.has_uncommitted_changes,
-        state: git.state || (git.has_uncommitted_changes ? "dirty" : "normal"),
+        is_clean: !worktreeDirty,
+        state: git.state || (worktreeDirty ? "dirty" : "normal"),
         staged_files: stagedFiles,
         unstaged_files: unstagedFiles,
         untracked_files: untrackedFiles,
         conflicted_files: conflictedFiles,
-        changed_files: git.changed_files || [
-          ...stagedFiles.map((path) => ({ path, index_status: "A", worktree_status: "." })),
-          ...unstagedFiles.map((path) => ({ path, index_status: ".", worktree_status: "M" })),
-          ...untrackedFiles.map((path) => ({ path, index_status: "?", worktree_status: "?" })),
-          ...conflictedFiles.map((path) => ({ path, index_status: "U", worktree_status: "U" }))
-        ],
+        changed_files: changedFileRecords,
         counts: {
           staged: stagedFiles.length,
           unstaged: unstagedFiles.length,
@@ -1716,6 +1799,10 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function formatPathForTable(value) {
+  return escapeHtml(displayValue(value)).replaceAll("/", "/<wbr>");
 }
 
 function renderInlineMarkdown(value) {
@@ -3247,7 +3334,7 @@ function renderBindingRow(binding) {
       <td>${escapeHtml(host)}:${escapeHtml(port)}</td>
       <td>${escapeHtml(username)}</td>
       <td><span class="badge muted">${escapeHtml(mode)}</span></td>
-      <td><code>${escapeHtml(path)}</code></td>
+      <td class="path-cell"><code title="${escapeHtml(path)}">${formatPathForTable(path)}</code></td>
       <td>${formatTime(binding.created_at)}</td>
       <td>
         <div class="row-actions">
@@ -3267,7 +3354,7 @@ function renderBindings() {
     : renderEmptyRow(7, "没有返回项目服务器绑定");
 
   return `
-    <div class="two-column">
+    <div class="bindings-layout">
       <section class="panel wide-list">
         <div class="panel-header">
           <h3>Project Server Bindings</h3>
@@ -3290,7 +3377,7 @@ function renderBindings() {
           </table>
         </div>
       </section>
-      <section class="panel">
+      <section class="panel bind-server-panel">
         <div class="panel-header">
           <h3>Bind Server</h3>
           <span>POST /projects/${escapeHtml(displayValue(projectId))}/bind-server</span>
