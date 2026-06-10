@@ -27,7 +27,6 @@
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "@gitkraken/gitkraken-components": "^13.0.0-vnext.36",
     "dragula": "^3.7.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"

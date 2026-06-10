@@ -1,4 +1,3 @@
-import { createGitKrakenGraphRenderer } from "./gitkrakenGraph.js";
 import "./styles.css";
 import projectPilotIconUrl from "./assets/projectpilot-icon.png";
 
@@ -11,11 +10,6 @@ const SESSION_KEY = "projectpilot.session";
 const LOCAL_DEMO_KEY = "projectpilot.localDemo.v2";
 const MISSING_VALUE = "未返回";
 const REQUEST_TIMEOUT_MS = 8000;
-const gitKrakenGraphRenderer = createGitKrakenGraphRenderer({
-  displayValue,
-  parseTimestamp,
-  setToast
-});
 
 const gitIssueDefinitions = [
   {
@@ -2499,12 +2493,10 @@ function updateToast() {
 function render() {
   const editingState = captureEditingState();
   const app = document.querySelector("#app");
-  gitKrakenGraphRenderer.reset();
   if (!state.user) {
     app.innerHTML = renderLogin();
     bindLogin();
     restoreEditingState(editingState);
-    gitKrakenGraphRenderer.mount();
     return;
   }
 
@@ -2524,7 +2516,6 @@ function render() {
 
   bindShell();
   restoreEditingState(editingState);
-  gitKrakenGraphRenderer.mount();
 }
 
 function renderLogin() {
@@ -3688,19 +3679,7 @@ function renderCommitGraph(repo) {
   if (!commits.length) {
     return `<p class="muted-copy">No commits returned for this repository.</p>`;
   }
-  const mountId = gitKrakenGraphRenderer.register({
-    ...repo,
-    commits
-  });
-  const height = Math.max(300, Math.min(520, 34 + commits.length * 28));
-  return `
-    <div class="gitkraken-graph-shell" data-gitkraken-graph-shell="${mountId}" style="--gitkraken-graph-height: ${height}px">
-      <div class="gitkraken-graph-mount" data-gitkraken-graph="${mountId}"></div>
-      <div class="gitkraken-graph-static-fallback" data-gitkraken-graph-fallback="${mountId}">
-        ${renderFallbackCommitGraph({ ...repo, commits })}
-      </div>
-    </div>
-  `;
+  return renderFallbackCommitGraph({ ...repo, commits });
 }
 
 function renderFallbackCommitGraph(repo) {
@@ -3711,11 +3690,9 @@ function renderFallbackCommitGraph(repo) {
     <div class="commit-graph topology gitlens-layout">
       <div class="gitlens-graph-header" aria-hidden="true">
         <span>Graph</span>
-        <span>Message</span>
+        <span>Commit</span>
         <span>Refs</span>
-        <span>Author</span>
-        <span>Date</span>
-        <span>Hash</span>
+        <span>SHA</span>
       </div>
       <div class="gitlens-graph-body">
         ${renderCommitGraphSvg(layout)}
@@ -3780,15 +3757,19 @@ function renderCommitGraphRow(row, index, rowHeight) {
     return `<div class="${rowClasses}" style="height: ${rowHeight}px"></div>`;
   }
   const refs = commit.refs || [];
+  const meta = [commit.author, commit.relative_time].filter(Boolean).map(displayValue).join(" · ");
   return `
     <article class="${rowClasses}" style="height: ${rowHeight}px">
       <div class="commit-message-cell">
-        <strong class="commit-subject">${escapeHtml(displayValue(commit.subject))}</strong>
-        ${commit.is_merge ? `<span class="badge warning compact">merge</span>` : ""}
+        <div class="commit-copy">
+          <strong class="commit-subject">${escapeHtml(displayValue(commit.subject))}</strong>
+          ${meta ? `<span class="commit-meta">${escapeHtml(meta)}</span>` : ""}
+        </div>
       </div>
-      <div class="commit-refs-cell">${refs.length ? renderRefPills(refs, { showEmpty: false, limit: 2 }) : ""}</div>
-      <span class="commit-author">${escapeHtml(displayValue(commit.author))}</span>
-      <span class="commit-date">${escapeHtml(displayValue(commit.relative_time))}</span>
+      <div class="commit-refs-cell">
+        ${commit.is_merge ? `<span class="badge warning compact">merge</span>` : ""}
+        ${refs.length ? renderRefPills(refs, { showEmpty: false, limit: 1 }) : ""}
+      </div>
       <code class="commit-hash">${escapeHtml(displayValue(commit.short_hash || String(commit.hash || "").slice(0, 7)))}</code>
     </article>
   `;
