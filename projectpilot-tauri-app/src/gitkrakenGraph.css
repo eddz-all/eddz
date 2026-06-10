@@ -1,6 +1,9 @@
 .gitkraken-graph-shell {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid rgba(145, 158, 187, 0.12);
   border-radius: 8px;
   background:
@@ -11,6 +14,7 @@
 .gitkraken-graph-mount {
   display: none;
   width: 100%;
+  min-width: 860px;
   height: var(--gitkraken-graph-height, 460px);
   min-height: 360px;
   overflow: hidden;
@@ -33,7 +37,7 @@
 .gitkraken-graph-mount .gk-graph {
   width: 100%;
   height: 100%;
-  min-width: 0;
+  min-width: 860px;
   overflow: hidden;
   --app__bg0: rgba(6, 11, 22, 0.88);
   --panel__bg0: rgba(9, 15, 29, 0.92);
@@ -81,11 +85,23 @@
   display: none;
 }
 
+.gitkraken-graph-mount .ref-zone {
+  align-items: center;
+}
+
+.gitkraken-graph-mount .ref-node {
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.gitkraken-graph-mount .ref-name {
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .gitkraken-icon {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.82;
+  display: none;
 }

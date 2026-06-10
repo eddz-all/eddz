@@ -17,6 +17,7 @@ import "./gitkrakenGraph.css";
 export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, setToast }) {
   const payloads = new Map();
   const roots = new Map();
+  const resizeObservers = new Map();
   let renderSerial = 0;
 
   function register(repo) {
@@ -45,14 +46,33 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
       }
 
       const shell = document.querySelector(`[data-gitkraken-graph-shell="${CSS.escape(mountId)}"]`);
-      try {
-        root.render(React.createElement(GitKrakenCommitGraph, { repo }));
-        shell?.classList.add("gitkraken-graph-mounted");
-        shell?.classList.remove("gitkraken-graph-error");
-      } catch (error) {
-        console.error("GitKraken graph render failed", error);
-        shell?.classList.remove("gitkraken-graph-mounted");
-        shell?.classList.add("gitkraken-graph-error");
+      const renderGraph = () => {
+        try {
+          root.render(React.createElement(GitKrakenCommitGraph, {
+            repo,
+            containerWidth: Math.round(mountElement.getBoundingClientRect().width)
+          }));
+          shell?.classList.add("gitkraken-graph-mounted");
+          shell?.classList.remove("gitkraken-graph-error");
+        } catch (error) {
+          console.error("GitKraken graph render failed", error);
+          shell?.classList.remove("gitkraken-graph-mounted");
+          shell?.classList.add("gitkraken-graph-error");
+        }
+      };
+
+      renderGraph();
+
+      if (!resizeObservers.has(mountElement) && "ResizeObserver" in window) {
+        const observerState = { lastWidth: Math.round(mountElement.getBoundingClientRect().width) };
+        const observer = new ResizeObserver((entries) => {
+          const nextWidth = Math.round(entries[0]?.contentRect?.width || 0);
+          if (Math.abs(nextWidth - observerState.lastWidth) < 8) return;
+          observerState.lastWidth = nextWidth;
+          renderGraph();
+        });
+        observer.observe(mountElement);
+        resizeObservers.set(mountElement, { observer, observerState });
       }
     });
 
@@ -60,10 +80,12 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
       if (activeMounts.has(mountElement) && document.body.contains(mountElement)) continue;
       root.unmount();
       roots.delete(mountElement);
+      resizeObservers.get(mountElement)?.observer.disconnect();
+      resizeObservers.delete(mountElement);
     }
   }
 
-  function GitKrakenCommitGraph({ repo }) {
+  function GitKrakenCommitGraph({ repo, containerWidth }) {
     const rows = toGraphRows(repo);
     const rowsStats = rows.reduce((accumulator, row) => {
       if (row.stats) {
@@ -74,7 +96,7 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
 
     return React.createElement(GraphContainer, {
       graphRows: rows,
-      columnsSettings: graphColumns(),
+      columnsSettings: graphColumns(containerWidth),
       repoPath: repo.repo_path || repo.project_path || "",
       rowsStats,
       shaLength: 7,
@@ -93,14 +115,39 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
     });
   }
 
-  function graphColumns() {
+  function graphColumns(containerWidth) {
+    const width = Number(containerWidth) || 0;
+    if (width < 980) {
+      return {
+        [commitZone]: { width: 44, isHidden: false, mode: "compact", order: 0 },
+        [commitMessageZone]: { width: 430, isHidden: false, order: 1 },
+        [refZone]: { width: 340, isHidden: false, order: 2 },
+        [commitAuthorZone]: { width: 92, isHidden: true, order: 3 },
+        [commitDateTimeZone]: { width: 96, isHidden: true, order: 4 },
+        [commitShaZone]: { width: 72, isHidden: false, order: 5 },
+        [changesZone]: { width: 72, isHidden: true, order: 6 }
+      };
+    }
+
+    if (width < 1220) {
+      return {
+        [commitZone]: { width: 52, isHidden: false, mode: "compact", order: 0 },
+        [commitMessageZone]: { width: 470, isHidden: false, order: 1 },
+        [refZone]: { width: 350, isHidden: false, order: 2 },
+        [commitAuthorZone]: { width: 108, isHidden: true, order: 3 },
+        [commitDateTimeZone]: { width: 92, isHidden: false, order: 4 },
+        [commitShaZone]: { width: 72, isHidden: false, order: 5 },
+        [changesZone]: { width: 72, isHidden: true, order: 6 }
+      };
+    }
+
     return {
-      [commitZone]: { width: 70, isHidden: false, mode: "compact", order: 0 },
-      [commitMessageZone]: { width: 320, isHidden: false, order: 1 },
-      [refZone]: { width: 220, isHidden: false, order: 2 },
-      [commitAuthorZone]: { width: 92, isHidden: false, order: 3 },
-      [commitDateTimeZone]: { width: 76, isHidden: false, order: 4 },
-      [commitShaZone]: { width: 66, isHidden: false, order: 5 },
+      [commitZone]: { width: 60, isHidden: false, mode: "compact", order: 0 },
+      [commitMessageZone]: { width: 440, isHidden: false, order: 1 },
+      [refZone]: { width: 460, isHidden: false, order: 2 },
+      [commitAuthorZone]: { width: 124, isHidden: false, order: 3 },
+      [commitDateTimeZone]: { width: 104, isHidden: false, order: 4 },
+      [commitShaZone]: { width: 76, isHidden: false, order: 5 },
       [changesZone]: { width: 72, isHidden: true, order: 6 }
     };
   }

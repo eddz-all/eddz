@@ -808,6 +808,10 @@ td span,
   align-items: start;
 }
 
+.repo-graph-body > div {
+  min-width: 0;
+}
+
 .repo-graph-body h5 {
   margin: 0 0 10px;
   color: #eef4ff;
