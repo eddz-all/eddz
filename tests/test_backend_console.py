@@ -177,6 +177,58 @@ class BackendConsoleTests(unittest.TestCase):
         self.assertEqual(ui.width, 45)
         self.assertEqual(ui.height, 8)
 
+    def test_rich_console_uses_full_wide_terminal_width(self) -> None:
+        if not RICH_AVAILABLE:
+            self.skipTest("Rich is required for terminal width assertions.")
+        output = io.StringIO()
+
+        with patch("projectpilot.backend_console.shutil.get_terminal_size", return_value=terminal_size((220, 40))):
+            ui = ConsoleUI(output, rich_enabled=True)
+
+        self.assertEqual(ui.width, 220)
+        self.assertEqual(ui.height, 40)
+
+    def test_rich_frame_refreshes_terminal_size_between_frames(self) -> None:
+        if not RICH_AVAILABLE:
+            self.skipTest("Rich is required for terminal frame assertions.")
+        output = io.StringIO()
+        sizes = [terminal_size((80, 5)), terminal_size((140, 8))]
+
+        with patch("projectpilot.backend_console.shutil.get_terminal_size", side_effect=sizes):
+            ui = ConsoleUI(output, rich_enabled=True)
+            ui.begin_frame()
+            ui.console.print("small")
+            ui.end_frame()
+
+        self.assertEqual(ui.width, 140)
+        self.assertEqual(ui.height, 8)
+        text = output.getvalue()
+        self.assertIn("\x1b[8;1H", text)
+        self.assertNotIn("\x1b[9;1H", text)
+
+    def test_rich_frame_clears_screen_after_resize(self) -> None:
+        if not RICH_AVAILABLE:
+            self.skipTest("Rich is required for terminal frame assertions.")
+        output = io.StringIO()
+        sizes = [
+            terminal_size((80, 5)),
+            terminal_size((80, 5)),
+            terminal_size((120, 7)),
+        ]
+
+        with patch("projectpilot.backend_console.shutil.get_terminal_size", side_effect=sizes):
+            ui = ConsoleUI(output, rich_enabled=True)
+            ui.begin_frame()
+            ui.console.print("first")
+            ui.end_frame()
+            ui.begin_frame()
+            ui.console.print("second")
+            ui.end_frame()
+
+        text = output.getvalue()
+        self.assertIn("\x1b[2J\x1b[H", text)
+        self.assertIn("\x1b[7;1H", text)
+
     def test_compact_nav_keeps_all_shortcut_markers_on_narrow_width(self) -> None:
         if not RICH_AVAILABLE:
             self.skipTest("Rich is required for compact navigation assertions.")
@@ -204,11 +256,10 @@ class BackendConsoleTests(unittest.TestCase):
 
         with patch("projectpilot.backend_console.shutil.get_terminal_size", return_value=terminal_size((80, 5))):
             ui = ConsoleUI(output, rich_enabled=True)
-
-        ui.begin_frame()
-        for index in range(8):
-            ui.console.print(f"line {index}")
-        ui.end_frame()
+            ui.begin_frame()
+            for index in range(8):
+                ui.console.print(f"line {index}")
+            ui.end_frame()
 
         text = output.getvalue()
         plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
@@ -226,12 +277,11 @@ class BackendConsoleTests(unittest.TestCase):
 
         with patch("projectpilot.backend_console.shutil.get_terminal_size", return_value=terminal_size((80, 5))):
             ui = ConsoleUI(output, rich_enabled=True)
-
-        ui.begin_frame()
-        for index in range(8):
-            ui.console.print(f"line {index}")
-        ui.render_footer()
-        ui.end_frame()
+            ui.begin_frame()
+            for index in range(8):
+                ui.console.print(f"line {index}")
+            ui.render_footer()
+            ui.end_frame()
 
         text = output.getvalue()
         plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)

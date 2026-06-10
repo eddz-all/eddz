@@ -700,12 +700,22 @@ class ConsoleUI:
         self._target_stream = stream
         self.stream = stream
         self.rich_enabled = bool(rich_enabled and RICH_AVAILABLE)
-        detected_size = shutil.get_terminal_size((120, 30))
-        self.width = max(20, min(detected_size.columns, 180)) if self.rich_enabled else 96
-        self.height = max(1, detected_size.lines) if self.rich_enabled else 30
+        self.width = 96
+        self.height = 30
         self._frame_stream: io.StringIO | None = None
         self._frame_footer_lines = 0
+        self._last_rendered_size: tuple[int, int] | None = None
+        self.refresh_terminal_size()
         self.console = self._make_console(stream) if RICH_AVAILABLE else None
+
+    def refresh_terminal_size(self) -> None:
+        if not self.rich_enabled:
+            self.width = 96
+            self.height = 30
+            return
+        detected_size = shutil.get_terminal_size((120, 30))
+        self.width = max(20, detected_size.columns)
+        self.height = max(1, detected_size.lines)
 
     def _make_console(self, stream: TextIO) -> Any:
         return Console(
@@ -723,6 +733,7 @@ class ConsoleUI:
     def begin_frame(self) -> None:
         if not self.rich_enabled or self.console is None or self._frame_stream is not None:
             return
+        self.refresh_terminal_size()
         self._frame_stream = io.StringIO()
         self._frame_footer_lines = 0
         self.stream = self._frame_stream
@@ -749,15 +760,19 @@ class ConsoleUI:
 
         lines = frame.splitlines()
         height = max(1, self.height)
+        size = (self.width, height)
         if footer_lines > 0 and len(lines) > height:
             footer_count = min(footer_lines, height, len(lines))
             body_count = max(0, height - footer_count)
             lines = lines[:body_count] + lines[-footer_count:]
         target = self._target_stream
         target.write("\x1b[?25l")
+        if self._last_rendered_size is not None and self._last_rendered_size != size:
+            target.write("\x1b[2J\x1b[H")
         for row in range(height):
             line = lines[row] if row < len(lines) else ""
             target.write(f"\x1b[{row + 1};1H{line}\x1b[K")
+        self._last_rendered_size = size
         flush = getattr(target, "flush", None)
         if flush is not None:
             flush()
