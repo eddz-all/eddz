@@ -206,6 +206,7 @@ async function setE2eStorage(cdp) {
       localStorage.setItem("projectpilot.apiBase", "http://127.0.0.1:9");
       localStorage.setItem("projectpilot.apiBaseVersion", "20260610-cloudflare-functioning-element");
       localStorage.removeItem("projectpilot.localDemo.v1");
+      localStorage.removeItem("projectpilot.localDemo.v2");
       true;
     `,
     returnByValue: true
@@ -265,8 +266,8 @@ async function runScenario(cdp) {
       await setValue('[data-server-form] input[name="host"]', "127.0.0.1");
       await setValue('[data-server-form] input[name="port"]', "22");
       await setValue('[data-server-form] input[name="username"]', "eddz");
-      await setValue('[data-server-form] textarea[name="description"]', "E2E local target");
-      await selectByText('[data-server-form] select[name="connection_mode"]', "local");
+      await setValue('[data-server-form] textarea[name="description"]', "E2E managed target");
+      await selectByText('[data-server-form] select[name="connection_mode"]', "managed");
       await click('[data-server-form] button[type="submit"]');
       await waitFor(() => visibleText().includes(serverName), "created server");
 
