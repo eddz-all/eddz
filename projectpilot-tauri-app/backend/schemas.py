@@ -56,6 +56,10 @@ class AIAnalyzeRequest(BaseModel):
     focus: str = "environment"
 
 
+class GitAnalyzeRequest(BaseModel):
+    analyses: list[str] | None = None
+
+
 class ProjectReportRequest(BaseModel):
     project_id: int
     include_ai_analysis: bool = True
