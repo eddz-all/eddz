@@ -1,10 +1,10 @@
 const API_BASE_KEY = "projectpilot.apiBase";
 const API_BASE_VERSION_KEY = "projectpilot.apiBaseVersion";
-const API_BASE_VERSION = "20260610-cloudflare-functioning-element";
-const DEFAULT_API_BASE = "https://functioning-element-pushing-whenever.trycloudflare.com";
+const API_BASE_VERSION = "20260610-local-test-workspace";
+const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 const LOCAL_API_PROXY_BASE = "/api";
 const SESSION_KEY = "projectpilot.session";
-const LOCAL_DEMO_KEY = "projectpilot.localDemo.v1";
+const LOCAL_DEMO_KEY = "projectpilot.localDemo.v2";
 const MISSING_VALUE = "未返回";
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -317,89 +317,161 @@ function localTimestamp(minutesAgo = 0) {
 function defaultLocalDemoData() {
   const createdAt = localTimestamp(42);
   const scannedAt = localTimestamp(7);
+  const demoRoot = "/Users/eddz/work/projectpilot-demo";
+  const workspaceRoot = `${demoRoot}/workspaces`;
+  const demoRepositories = [
+    {
+      id: 1,
+      name: "Demo Git Graph Showcase",
+      slug: "showcase-graph",
+      branch: "main",
+      ahead: 0,
+      behind: 0,
+      dirty: false,
+      state: "normal",
+      last_commit: "371c655 merge polished Git graph presentation",
+      disk_usage: "58%"
+    },
+    {
+      id: 2,
+      name: "Demo Diverged Dirty",
+      slug: "diverged-dirty",
+      branch: "main",
+      ahead: 1,
+      behind: 1,
+      dirty: true,
+      state: "normal",
+      last_commit: "8c5e999 local side change",
+      disk_usage: "64%",
+      staged_files: ["docs/local-plan.md"],
+      unstaged_files: ["app.py", "dist/bundle.js"],
+      untracked_files: [".env", "scratch/manual-checklist.md"]
+    },
+    {
+      id: 3,
+      name: "Demo Merge Conflict",
+      slug: "merge-conflict",
+      branch: "main",
+      ahead: 0,
+      behind: 0,
+      dirty: true,
+      state: "conflict",
+      last_commit: "d63fd53 main branch change",
+      disk_usage: "61%",
+      conflicted_files: ["app.py"],
+      unstaged_files: ["app.py"]
+    },
+    {
+      id: 4,
+      name: "Demo Detached HEAD",
+      slug: "detached-head",
+      branch: null,
+      ahead: 0,
+      behind: 0,
+      dirty: true,
+      state: "detached",
+      last_commit: "6a1887c document executor approval boundary",
+      disk_usage: "57%",
+      untracked_files: ["detached-note.md"]
+    },
+    {
+      id: 5,
+      name: "Demo Wrong Branch",
+      slug: "wrong-branch",
+      branch: "feature/wrong-target",
+      ahead: 0,
+      behind: 0,
+      dirty: false,
+      state: "normal",
+      last_commit: "4c2fb54 add branch migration notes",
+      disk_usage: "59%"
+    }
+  ];
+  const pathForRepo = (repo) => `${workspaceRoot}/${repo.slug}`;
   return {
     nextProjectId: 2,
-    nextServerId: 3,
-    nextBindingId: 2,
-    nextGitStatusId: 2,
-    nextEnvironmentSnapshotId: 2,
+    nextServerId: 6,
+    nextBindingId: 6,
+    nextGitStatusId: 6,
+    nextEnvironmentSnapshotId: 6,
     nextOperationLogId: 3,
-    nextTaskId: 3,
+    nextTaskId: 11,
     projects: [
       {
         id: 1,
-        name: "ProjectPilot Workspace",
-        path: "/Users/eddz/work/engine",
-        description: "Local desktop demo workspace",
+        name: "ProjectPilot Git Workspace Demo",
+        path: demoRoot,
+        description: "Local Git demo workspace with rich branch, tag, conflict, detached HEAD, and dirty worktree states.",
         created_at: createdAt
       }
     ],
-    servers: [
-      {
-        id: 1,
-        name: "Local Executor",
+    servers: demoRepositories.map((repo) => ({
+        id: repo.id,
+        name: repo.name,
         host: "127.0.0.1",
-        port: 22,
+        port: 2200 + repo.id,
         username: "eddz",
         connection_mode: "local",
         connection_status: "online",
-        description: "Local machine used for desktop workflow validation",
+        description: `Local demo workspace: ${repo.slug}`,
         created_at: createdAt
-      },
-      {
-        id: 2,
-        name: "server-b",
-        host: "192.168.0.20",
-        port: 22,
-        username: "hzy",
-        connection_mode: "executor",
-        connection_status: "ready",
-        description: "Headless executor profile placeholder",
-        created_at: localTimestamp(35)
-      }
-    ],
-    bindings: [
-      {
-        id: 1,
+      })),
+    bindings: demoRepositories.map((repo) => ({
+        id: repo.id,
         project_id: 1,
-        server_id: 1,
-        project_path: "/Users/eddz/work/engine",
+        server_id: repo.id,
+        project_path: pathForRepo(repo),
         created_at: localTimestamp(38)
-      }
-    ],
-    gitStatuses: [
-      {
-        id: 1,
+      })),
+    gitStatuses: demoRepositories.map((repo) => {
+      const staged = repo.staged_files || [];
+      const unstaged = repo.unstaged_files || [];
+      const untracked = repo.untracked_files || [];
+      const conflicted = repo.conflicted_files || [];
+      return {
+        id: repo.id,
         project_id: 1,
-        server_id: 1,
-        branch: "main",
-        remote_url: "local-demo",
-        ahead: 3,
-        behind: 0,
-        has_uncommitted_changes: false,
-        last_commit: "b049d2c Add ProjectPilot Tauri desktop app",
+        server_id: repo.id,
+        branch: repo.branch,
+        remote_url: `${demoRoot}/remotes/${repo.slug}.git`,
+        upstream: repo.branch ? `origin/${repo.branch}` : null,
+        ahead: repo.ahead,
+        behind: repo.behind,
+        state: repo.state,
+        has_uncommitted_changes: repo.dirty,
+        last_commit: repo.last_commit,
+        staged_files: staged,
+        unstaged_files: unstaged,
+        untracked_files: untracked,
+        conflicted_files: conflicted,
+        conflicted_count: conflicted.length,
+        changed_files: [
+          ...staged.map((path) => ({ path, index_status: "A", worktree_status: "." })),
+          ...unstaged.map((path) => ({ path, index_status: ".", worktree_status: "M" })),
+          ...untracked.map((path) => ({ path, index_status: "?", worktree_status: "?" })),
+          ...conflicted.map((path) => ({ path, index_status: "U", worktree_status: "U" }))
+        ],
         created_at: scannedAt
-      }
-    ],
-    environmentSnapshots: [
-      {
-        id: 1,
+      };
+    }),
+    environmentSnapshots: demoRepositories.map((repo) => ({
+        id: repo.id,
         project_id: 1,
-        server_id: 1,
+        server_id: repo.id,
         os: "macOS",
         architecture: "arm64",
         python_version: "Python 3",
         node_version: "Node.js",
         docker_installed: true,
-        docker_running: false,
+        docker_running: repo.id === 1,
         cuda_version: null,
-        disk_usage: "62%",
+        disk_usage: repo.disk_usage,
         raw_data: {
-          source: "local-demo"
+          source: "local-demo",
+          project_path: pathForRepo(repo)
         },
         created_at: scannedAt
-      }
-    ],
+      })),
     operationLogs: [
       {
         id: 1,
@@ -408,8 +480,8 @@ function defaultLocalDemoData() {
         operation_type: "detect_project_server",
         risk_level: "medium",
         status: "completed",
-        summary: "Local demo detection completed",
-        detail: "Backend was unavailable, so ProjectPilot used the local demo store.",
+        summary: "Test workspace demo loaded",
+        detail: demoRoot,
         created_at: scannedAt
       },
       {
@@ -419,42 +491,42 @@ function defaultLocalDemoData() {
         operation_type: "desktop_bootstrap",
         risk_level: "low",
         status: "completed",
-        summary: "Desktop local workflow is ready",
-        detail: "Project, server, binding, detection and task stream are available without a remote backend.",
+        summary: "Git Workspace showcase is ready",
+        detail: "Local Demo now opens the test workspace by default.",
         created_at: localTimestamp(10)
       }
     ],
     executorTasks: [
-      {
-        id: "local-1",
+      ...demoRepositories.map((repo) => ({
+        id: `local-${repo.id}`,
         project_id: 1,
-        server_id: 1,
+        server_id: repo.id,
         task_type: "detect_git",
         status: "completed",
         executor_id: "local-demo",
-        message: "Git status captured in local demo mode",
+        message: `Git status captured for ${repo.name}`,
         result: {
           success: true,
-          branch: "main",
-          remote_url: "local-demo",
-          ahead: 3,
-          behind: 0,
-          has_uncommitted_changes: false,
-          last_commit: "b049d2c Add ProjectPilot Tauri desktop app",
+          branch: repo.branch,
+          remote_url: `${demoRoot}/remotes/${repo.slug}.git`,
+          ahead: repo.ahead,
+          behind: repo.behind,
+          has_uncommitted_changes: repo.dirty,
+          last_commit: repo.last_commit,
           created_at: scannedAt
         },
         created_at: scannedAt,
         claimed_at: scannedAt,
         completed_at: scannedAt
-      },
-      {
-        id: "local-2",
+      })),
+      ...demoRepositories.map((repo) => ({
+        id: `local-${repo.id + 5}`,
         project_id: 1,
-        server_id: 1,
+        server_id: repo.id,
         task_type: "detect_environment",
         status: "completed",
         executor_id: "local-demo",
-        message: "Environment snapshot captured in local demo mode",
+        message: `Environment snapshot captured for ${repo.name}`,
         result: {
           success: true,
           os: "macOS",
@@ -462,14 +534,14 @@ function defaultLocalDemoData() {
           python_version: "Python 3",
           node_version: "Node.js",
           docker_installed: true,
-          docker_running: false,
-          disk_usage: "62%",
+          docker_running: repo.id === 1,
+          disk_usage: repo.disk_usage,
           created_at: scannedAt
         },
         created_at: scannedAt,
         claimed_at: scannedAt,
         completed_at: scannedAt
-      }
+      }))
     ]
   };
 }
@@ -956,7 +1028,14 @@ function localGitAnalysis(data, projectId) {
       remote_url: git.remote_url || null,
       ahead: Number(git.ahead || 0),
       behind: Number(git.behind || 0),
+      state: git.state || "normal",
       has_uncommitted_changes: Boolean(git.has_uncommitted_changes),
+      staged_files: git.staged_files || [],
+      unstaged_files: git.unstaged_files || [],
+      untracked_files: git.untracked_files || [],
+      conflicted_files: git.conflicted_files || [],
+      conflicted_count: git.conflicted_count || 0,
+      changed_files: git.changed_files || [],
       last_commit: git.last_commit || null,
       created_at: git.created_at || null
     };
@@ -1071,28 +1150,147 @@ function localGitAnalysis(data, projectId) {
   };
 }
 
+function localDemoRef(name, type, target, isHead = false, upstream = null) {
+  const prefix = type === "remote" ? "refs/remotes/" : type === "tag" ? "refs/tags/" : "refs/heads/";
+  return {
+    name,
+    full_name: `${prefix}${name}`,
+    type,
+    target,
+    is_head: isHead,
+    upstream
+  };
+}
+
+function localDemoCommit(hash, parents, subject, author, relativeTime, refs, lane, isMerge = false, isHead = false) {
+  return {
+    hash,
+    short_hash: hash.slice(0, 7),
+    parents,
+    subject,
+    author,
+    relative_time: relativeTime,
+    refs,
+    lane,
+    is_merge: isMerge,
+    is_head: isHead
+  };
+}
+
+function localDemoGraphForSlug(slug) {
+  if (slug !== "showcase-graph") return null;
+
+  const hashes = {
+    head: "371c655cb0ff54fc9b932ff10fac6ba4659e9730",
+    polish: "b9f1a99f40fe77041f8716255af727cdf86f216c",
+    palette: "60802ca35a7d9d7f0d1e4e6cbfb4c7f1a193e1f",
+    notes: "412da6d18fd8d21c2b6aa1a9c8ad2ef758aa0195",
+    graphMerge: "8001233abd8300de0af46ebf7c66a17d4f4526ef",
+    graphDocs: "c41500e670c514cd861b2bd2a3d5805671601269",
+    graphModel: "ac7a1fc51f9d3a3f1a3d61b7ae6bf4f0e128b331",
+    boundary: "f3a24c7e66f62f209bb802166f1f5f6ea24cc024",
+    health: "45811df5fb3d7c19a5a0bc5759ed88f5187d94de",
+    init: "e77c1b0d8ee25d8239618a44dff1da62b9920b1f"
+  };
+  const refs = [
+    localDemoRef("main", "branch", hashes.head, true, "origin/main"),
+    localDemoRef("feature/git-workspace", "branch", hashes.graphDocs),
+    localDemoRef("feature/graph-polish", "branch", hashes.polish),
+    localDemoRef("release/demo-ready", "branch", hashes.graphMerge),
+    localDemoRef("release/v0.2-showcase", "branch", hashes.head),
+    localDemoRef("v0.1.0", "tag", hashes.graphMerge),
+    localDemoRef("v0.2.0", "tag", hashes.head),
+    localDemoRef("origin/feature/git-workspace", "remote", hashes.graphDocs),
+    localDemoRef("origin/feature/graph-polish", "remote", hashes.polish),
+    localDemoRef("origin/main", "remote", hashes.head),
+    localDemoRef("origin/release/demo-ready", "remote", hashes.graphMerge),
+    localDemoRef("origin/release/v0.2-showcase", "remote", hashes.head)
+  ];
+  const refsFor = (target) => refs.filter((ref) => ref.target === target);
+  return {
+    commit: hashes.head,
+    refs,
+    commits: [
+      localDemoCommit(hashes.head, [hashes.notes, hashes.polish], "merge polished Git graph presentation", "ProjectPilot Demo", "2 hours ago", refsFor(hashes.head), 0, true, true),
+      localDemoCommit(hashes.notes, [hashes.graphMerge], "prepare graph demo release notes", "ProjectPilot Demo", "6 hours ago", refsFor(hashes.notes), 0),
+      localDemoCommit(hashes.polish, [hashes.palette], "add adaptive graph layout", "ProjectPilot Demo", "8 hours ago", refsFor(hashes.polish), 1),
+      localDemoCommit(hashes.palette, [hashes.graphMerge], "add graph lane palette", "ProjectPilot Demo", "12 hours ago", refsFor(hashes.palette), 1),
+      localDemoCommit(hashes.graphMerge, [hashes.boundary, hashes.graphDocs], "merge Git workspace graph model", "ProjectPilot Demo", "1 day ago", refsFor(hashes.graphMerge), 0, true),
+      localDemoCommit(hashes.boundary, [hashes.health], "document executor approval boundary", "ProjectPilot Demo", "2 days ago", refsFor(hashes.boundary), 0),
+      localDemoCommit(hashes.graphDocs, [hashes.graphModel], "document Git workspace graph", "ProjectPilot Demo", "2 days ago", refsFor(hashes.graphDocs), 1),
+      localDemoCommit(hashes.graphModel, [hashes.health], "add Git workspace summary model", "ProjectPilot Demo", "3 days ago", refsFor(hashes.graphModel), 1),
+      localDemoCommit(hashes.health, [hashes.init], "add health score model", "ProjectPilot Demo", "4 days ago", refsFor(hashes.health), 0),
+      localDemoCommit(hashes.init, [], "initialize ProjectPilot demo shell", "ProjectPilot Demo", "5 days ago", refsFor(hashes.init), 0)
+    ],
+    graph_text: [
+      "*   371c655 (HEAD -> main, tag: v0.2.0, origin/main) merge polished Git graph presentation",
+      "|\\",
+      "| * b9f1a99 (feature/graph-polish) add adaptive graph layout",
+      "| * 60802ca add graph lane palette",
+      "* | 412da6d prepare graph demo release notes",
+      "|/",
+      "*   8001233 (tag: v0.1.0, release/demo-ready) merge Git workspace graph model"
+    ]
+  };
+}
+
 function localGitWorktree(data, projectId) {
   const project = data.projects.find((item) => Number(item.id) === Number(projectId));
   const status = localProjectStatus(data, projectId);
   const now = Date.now();
   const repositories = status.servers.map((server, index) => {
     const git = server.latest_git_status || {};
+    const slug = String(server.project_path || "").split("/").pop();
+    const demoGraph = localDemoGraphForSlug(slug);
     const seed = `${projectId}${server.server_id}${index}`;
     const headHash = `local${seed}head000000000000000000000000000000`.slice(0, 40);
     const parentHash = `local${seed}base000000000000000000000000000000`.slice(0, 40);
     const createdAt = parseTimestamp(git.created_at);
     const ageMinutes = createdAt ? Math.max(2, Math.round((now - createdAt) / 60000)) : 8 + index;
-    const refs = [
+    const refs = git.branch
+      ? [
+          {
+            name: git.branch,
+            full_name: `refs/heads/${git.branch}`,
+            type: "branch",
+            target: headHash,
+            is_head: true,
+            upstream: git.remote_url ? `origin/${git.branch}` : null
+          }
+        ]
+      : [];
+    const changedFiles = git.has_uncommitted_changes ? ["src/app.js", ".env.local"] : [];
+    const stagedFiles = git.staged_files || [];
+    const unstagedFiles = git.unstaged_files || changedFiles;
+    const untrackedFiles = git.untracked_files || [];
+    const conflictedFiles = git.conflicted_files || [];
+    const graphRefs = demoGraph?.refs || refs;
+    const graphCommits = demoGraph?.commits || [
       {
-        name: git.branch || "main",
-        full_name: `refs/heads/${git.branch || "main"}`,
-        type: "branch",
-        target: headHash,
-        is_head: true,
-        upstream: git.remote_url ? `origin/${git.branch || "main"}` : null
+        hash: headHash,
+        short_hash: headHash.slice(0, 7),
+        parents: [parentHash],
+        subject: git.last_commit || "Local demo HEAD",
+        author: "ProjectPilot",
+        relative_time: `${index + 1} minutes ago`,
+        refs,
+        lane: 0,
+        is_merge: false,
+        is_head: true
+      },
+      {
+        hash: parentHash,
+        short_hash: parentHash.slice(0, 7),
+        parents: [],
+        subject: "Baseline workspace state",
+        author: "ProjectPilot",
+        relative_time: `${ageMinutes} minutes ago`,
+        refs: [],
+        lane: 0,
+        is_merge: false,
+        is_head: false
       }
     ];
-    const changedFiles = git.has_uncommitted_changes ? ["src/app.js", ".env.local"] : [];
     return {
       success: true,
       binding_id: server.binding_id,
@@ -1102,54 +1300,34 @@ function localGitWorktree(data, projectId) {
       connection_mode: server.connection_mode,
       project_path: server.project_path,
       repo_path: server.project_path,
-      branch: git.branch || "main",
+      branch: git.branch ?? null,
       upstream: git.remote_url ? `origin/${git.branch || "main"}` : null,
-      commit: headHash,
+      commit: demoGraph?.commit || headHash,
       ahead: Number(git.ahead || 0),
       behind: Number(git.behind || 0),
-      state: git.has_uncommitted_changes ? "dirty" : "normal",
+      state: git.state || (git.has_uncommitted_changes ? "dirty" : "normal"),
       remote_urls: git.remote_url ? [git.remote_url] : [],
-      refs,
-      commits: [
-        {
-          hash: headHash,
-          short_hash: headHash.slice(0, 7),
-          parents: [parentHash],
-          subject: git.last_commit || "Local demo HEAD",
-          author: "ProjectPilot",
-          relative_time: `${index + 1} minutes ago`,
-          refs,
-          lane: 0,
-          is_merge: false,
-          is_head: true
-        },
-        {
-          hash: parentHash,
-          short_hash: parentHash.slice(0, 7),
-          parents: [],
-          subject: "Baseline workspace state",
-          author: "ProjectPilot",
-          relative_time: `${ageMinutes} minutes ago`,
-          refs: [],
-          lane: 0,
-          is_merge: false,
-          is_head: false
-        }
-      ],
-      graph_text: [`* ${headHash.slice(0, 7)} (${git.branch || "main"}) ${git.last_commit || "Local demo HEAD"}`, `* ${parentHash.slice(0, 7)} Baseline workspace state`],
+      refs: graphRefs,
+      commits: graphCommits,
+      graph_text: demoGraph?.graph_text || [`* ${headHash.slice(0, 7)} (${git.branch || "detached"}) ${git.last_commit || "Local demo HEAD"}`, `* ${parentHash.slice(0, 7)} Baseline workspace state`],
       worktree: {
         is_clean: !git.has_uncommitted_changes,
-        state: git.has_uncommitted_changes ? "dirty" : "normal",
-        staged_files: [],
-        unstaged_files: changedFiles,
-        untracked_files: [],
-        conflicted_files: [],
-        changed_files: changedFiles.map((path) => ({ path, index_status: ".", worktree_status: "M" })),
+        state: git.state || (git.has_uncommitted_changes ? "dirty" : "normal"),
+        staged_files: stagedFiles,
+        unstaged_files: unstagedFiles,
+        untracked_files: untrackedFiles,
+        conflicted_files: conflictedFiles,
+        changed_files: git.changed_files || [
+          ...stagedFiles.map((path) => ({ path, index_status: "A", worktree_status: "." })),
+          ...unstagedFiles.map((path) => ({ path, index_status: ".", worktree_status: "M" })),
+          ...untrackedFiles.map((path) => ({ path, index_status: "?", worktree_status: "?" })),
+          ...conflictedFiles.map((path) => ({ path, index_status: "U", worktree_status: "U" }))
+        ],
         counts: {
-          staged: 0,
-          unstaged: changedFiles.length,
-          untracked: 0,
-          conflicted: 0
+          staged: stagedFiles.length,
+          unstaged: unstagedFiles.length,
+          untracked: untrackedFiles.length,
+          conflicted: conflictedFiles.length
         }
       }
     };
