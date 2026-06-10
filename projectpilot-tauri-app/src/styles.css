@@ -327,21 +327,27 @@ td span,
 
 .connection,
 .badge,
-.risk,
+.risk:not(.metric-card),
 .method {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
   min-height: 26px;
   border-radius: 999px;
+  overflow: hidden;
   padding: 0 10px;
   font-size: 12px;
   font-weight: 700;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .connection.online,
 .badge.healthy,
-.risk.healthy {
+.risk.healthy:not(.metric-card) {
   color: #76efac;
   background: rgba(31, 199, 113, 0.14);
 }
@@ -354,7 +360,7 @@ td span,
 .connection.error,
 .connection.checking,
 .badge.warning,
-.risk.warning {
+.risk.warning:not(.metric-card) {
   color: #f9c75d;
   background: rgba(249, 174, 55, 0.15);
 }
@@ -369,7 +375,7 @@ td span,
   background: rgba(255, 88, 116, 0.14);
 }
 
-.risk.danger {
+.risk.danger:not(.metric-card) {
   color: #ff6d8f;
   background: rgba(255, 88, 116, 0.14);
 }
@@ -546,7 +552,56 @@ td span,
 }
 
 .git-table {
-  min-width: 980px;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.git-table th:nth-child(1),
+.git-table td:nth-child(1) {
+  width: 17%;
+}
+
+.git-table th:nth-child(2),
+.git-table td:nth-child(2) {
+  width: 18%;
+}
+
+.git-table th:nth-child(3),
+.git-table td:nth-child(3) {
+  width: 11%;
+}
+
+.git-table th:nth-child(4),
+.git-table td:nth-child(4),
+.git-table th:nth-child(5),
+.git-table td:nth-child(5) {
+  width: 13%;
+}
+
+.git-table th:nth-child(6),
+.git-table td:nth-child(6) {
+  width: 17%;
+}
+
+.git-table th:nth-child(7),
+.git-table td:nth-child(7) {
+  width: 11%;
+}
+
+.git-table th,
+.git-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-table td strong,
+.git-table small,
+.git-table code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .git-table small,
@@ -560,6 +615,20 @@ td span,
   display: block;
   margin-top: 6px;
   color: #93a0b8;
+}
+
+.git-table .row-actions {
+  justify-content: flex-start;
+}
+
+.git-table .row-actions button {
+  min-width: 0;
+  padding: 0 9px;
+}
+
+.git-workspace .badge {
+  max-width: none;
+  flex: 0 0 auto;
 }
 
 .git-plan-list,
@@ -1163,6 +1232,11 @@ td span,
   padding: 18px;
 }
 
+.panel.wide-list {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .panel.wide {
   min-height: 310px;
 }
@@ -1185,7 +1259,12 @@ td span,
 }
 
 .table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-gutter: stable;
 }
 
@@ -1193,6 +1272,76 @@ table {
   width: 100%;
   min-width: 680px;
   border-collapse: collapse;
+}
+
+.bindings-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.bindings-table th:nth-child(1),
+.bindings-table td:nth-child(1) {
+  width: 14%;
+}
+
+.bindings-table th:nth-child(2),
+.bindings-table td:nth-child(2) {
+  width: 16%;
+}
+
+.bindings-table th:nth-child(3),
+.bindings-table td:nth-child(3) {
+  width: 8%;
+}
+
+.bindings-table th:nth-child(4),
+.bindings-table td:nth-child(4) {
+  width: 12%;
+}
+
+.bindings-table th:nth-child(5),
+.bindings-table td:nth-child(5) {
+  width: 27%;
+}
+
+.bindings-table th:nth-child(6),
+.bindings-table td:nth-child(6) {
+  width: 9%;
+}
+
+.bindings-table th:nth-child(7),
+.bindings-table td:nth-child(7) {
+  width: 14%;
+}
+
+.bindings-table td,
+.bindings-table th {
+  overflow-wrap: anywhere;
+}
+
+.bindings-table .badge {
+  min-width: 54px;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.bindings-table th:nth-child(2),
+.bindings-table td:nth-child(2),
+.bindings-table th:nth-child(3),
+.bindings-table td:nth-child(3) {
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bindings-table td code {
+  white-space: normal;
+}
+
+.bindings-table .row-actions {
+  justify-content: flex-start;
 }
 
 .dashboard-table-wrap {
@@ -1245,7 +1394,67 @@ table {
 }
 
 .matrix-table {
-  min-width: 780px;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.matrix-table th:nth-child(1),
+.matrix-table td:nth-child(1) {
+  width: 18%;
+}
+
+.matrix-table th:nth-child(2),
+.matrix-table td:nth-child(2) {
+  width: 23%;
+}
+
+.matrix-table th:nth-child(3),
+.matrix-table td:nth-child(3) {
+  width: 12%;
+}
+
+.matrix-table th:nth-child(4),
+.matrix-table td:nth-child(4) {
+  width: 10%;
+}
+
+.matrix-table th:nth-child(5),
+.matrix-table td:nth-child(5),
+.matrix-table th:nth-child(6),
+.matrix-table td:nth-child(6) {
+  width: 9%;
+}
+
+.matrix-table th:nth-child(7),
+.matrix-table td:nth-child(7) {
+  width: 8%;
+}
+
+.matrix-table th:nth-child(8),
+.matrix-table td:nth-child(8) {
+  width: 11%;
+}
+
+.matrix-table th,
+.matrix-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matrix-table td strong,
+.matrix-table td span,
+.matrix-table td code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-table .badge {
+  display: inline-flex;
+  max-width: none;
+  min-width: 78px;
 }
 
 th,
@@ -1297,6 +1506,14 @@ td strong {
   display: grid;
   gap: 8px;
   padding-left: 18px;
+}
+
+.insight-box > .risk {
+  align-self: start;
+  justify-self: start;
+  width: fit-content;
+  height: 26px;
+  line-height: 26px;
 }
 
 .activity-list {

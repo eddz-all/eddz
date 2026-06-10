@@ -3253,7 +3253,7 @@ function renderBindings() {
           <span>${escapeHtml(displayValue(project?.name))}</span>
         </div>
         <div class="table-wrap">
-          <table>
+          <table class="bindings-table">
             <thead>
               <tr>
                 <th>Server</th>
