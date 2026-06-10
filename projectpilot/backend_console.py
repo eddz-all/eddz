@@ -704,6 +704,7 @@ class ConsoleUI:
         self.width = max(20, min(detected_size.columns, 180)) if self.rich_enabled else 96
         self.height = max(1, detected_size.lines) if self.rich_enabled else 30
         self._frame_stream: io.StringIO | None = None
+        self._frame_footer_lines = 0
         self.console = self._make_console(stream) if RICH_AVAILABLE else None
 
     def _make_console(self, stream: TextIO) -> Any:
@@ -723,6 +724,7 @@ class ConsoleUI:
         if not self.rich_enabled or self.console is None or self._frame_stream is not None:
             return
         self._frame_stream = io.StringIO()
+        self._frame_footer_lines = 0
         self.stream = self._frame_stream
         self.console = self._make_console(self._frame_stream)
 
@@ -731,11 +733,13 @@ class ConsoleUI:
             return
         frame = self._frame_stream.getvalue()
         self._frame_stream = None
+        footer_lines = self._frame_footer_lines
+        self._frame_footer_lines = 0
         self.stream = self._target_stream
         self.console = self._make_console(self._target_stream) if RICH_AVAILABLE else None
-        self.write_frame(frame)
+        self.write_frame(frame, footer_lines=footer_lines)
 
-    def write_frame(self, frame: str) -> None:
+    def write_frame(self, frame: str, *, footer_lines: int = 0) -> None:
         if not self.rich_enabled:
             self._target_stream.write(frame)
             flush = getattr(self._target_stream, "flush", None)
@@ -745,6 +749,10 @@ class ConsoleUI:
 
         lines = frame.splitlines()
         height = max(1, self.height)
+        if footer_lines > 0 and len(lines) > height:
+            footer_count = min(footer_lines, height, len(lines))
+            body_count = max(0, height - footer_count)
+            lines = lines[:body_count] + lines[-footer_count:]
         target = self._target_stream
         target.write("\x1b[?25l")
         for row in range(height):
@@ -773,6 +781,8 @@ class ConsoleUI:
         status_line = clip(shortcuts, max(20, self.width - 2))
         if self.rich_enabled and self.console is not None:
             self.console.print(Text(f" {status_line} ", style=f"bold {UI_MUTED} on {UI_PANEL_ALT}"))
+            if self._frame_stream is not None:
+                self._frame_footer_lines = 1
             return
         print(file=self.stream)
         print(status_line, file=self.stream)

@@ -219,6 +219,30 @@ class BackendConsoleTests(unittest.TestCase):
         self.assertNotIn("line 5", plain)
         self.assertNotIn("\n", text)
 
+    def test_rich_frame_writer_preserves_footer_when_content_is_tall(self) -> None:
+        if not RICH_AVAILABLE:
+            self.skipTest("Rich is required for terminal frame assertions.")
+        output = io.StringIO()
+
+        with patch("projectpilot.backend_console.shutil.get_terminal_size", return_value=terminal_size((80, 5))):
+            ui = ConsoleUI(output, rich_enabled=True)
+
+        ui.begin_frame()
+        for index in range(8):
+            ui.console.print(f"line {index}")
+        ui.render_footer()
+        ui.end_frame()
+
+        text = output.getvalue()
+        plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
+        self.assertIn("\x1b[5;1H", text)
+        self.assertIn("line 0", plain)
+        self.assertIn("line 3", plain)
+        self.assertNotIn("line 4", plain)
+        self.assertNotIn("line 7", plain)
+        self.assertIn("q Quit", plain)
+        self.assertNotIn("\n", text)
+
     def test_keyboard_shortcuts_normalize_to_navigation(self) -> None:
         self.assertEqual(normalize_action_key("\t"), "down")
         self.assertEqual(normalize_action_key("\x0e"), "down")
