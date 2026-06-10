@@ -3677,9 +3677,13 @@ function renderCommitGraph(repo) {
     return `<p class="muted-copy">No commits returned for this repository.</p>`;
   }
   const rows = commitGraphRows(repo, commits);
+  const layout = buildGraphSvgLayout(rows);
   return `
-    <div class="commit-graph topology">
-      ${rows.map((row, index) => renderCommitGraphRow(row, index, rows.length)).join("")}
+    <div class="commit-graph topology svg-layout">
+      ${renderCommitGraphSvg(layout)}
+      <div class="commit-list">
+        ${rows.map((row, index) => renderCommitGraphRow(row, index, layout.rowHeights[index])).join("")}
+      </div>
     </div>
   `;
 }
@@ -3725,29 +3729,21 @@ function commitGraphRows(repo, commits) {
   return rows;
 }
 
-function renderCommitGraphRow(row, index, totalRows) {
+function renderCommitGraphRow(row, index, rowHeight) {
   const commit = row.commit;
   const rowClasses = [
-    "commit-graph-row",
+    "commit-list-row",
     commit ? "has-commit" : "connector",
-    index === 0 ? "is-first" : "",
-    index === totalRows - 1 ? "is-last" : ""
   ].filter(Boolean).join(" ");
   if (!commit) {
-    return `
-      <div class="${rowClasses}">
-        ${renderGraphLanes(row.graph)}
-        <div></div>
-      </div>
-    `;
+    return `<div class="${rowClasses}" style="height: ${rowHeight}px"></div>`;
   }
   const refs = commit.refs || [];
   const cardClasses = ["commit-card", commit.is_head ? "head" : "", commit.is_merge ? "merge" : ""]
     .filter(Boolean)
     .join(" ");
   return `
-    <article class="${rowClasses}">
-      ${renderGraphLanes(row.graph || "* ")}
+    <article class="${rowClasses}" style="height: ${rowHeight}px">
       <div class="${cardClasses}">
         <div class="commit-title">
           <strong>${escapeHtml(displayValue(commit.subject))}</strong>
@@ -3764,67 +3760,104 @@ function renderCommitGraphRow(row, index, totalRows) {
   `;
 }
 
-function renderGraphLanes(value) {
+function buildGraphSvgLayout(rows) {
   const laneCount = 4;
-  const lanes = Array.from({ length: laneCount }, () => ({
-    active: false,
-    node: false,
-    down: false,
-    up: false,
-    horizontal: false
-  }));
+  const laneGap = 13;
+  const paddingX = 8;
+  const width = paddingX * 2 + (laneCount - 1) * laneGap + 16;
+  const rowHeights = rows.map((row) => (row.commit ? 62 : 22));
+  const rowTops = [];
+  let height = 0;
+  rowHeights.forEach((rowHeight) => {
+    rowTops.push(height);
+    height += rowHeight;
+  });
+  const centers = rowHeights.map((rowHeight, index) => rowTops[index] + rowHeight / 2);
+  const tokens = rows.map((row) => parseGraphTokens(row.graph || "* ", laneCount));
+  const laneX = (lane) => paddingX + lane * laneGap + 8;
+  return {
+    width,
+    height,
+    rowHeights,
+    rowTops,
+    centers,
+    tokens,
+    laneX,
+    laneCount
+  };
+}
 
+function parseGraphTokens(value, laneCount) {
+  const token = {
+    active: Array.from({ length: laneCount }, () => false),
+    nodes: [],
+    diagonals: [],
+    horizontals: []
+  };
   [...String(value || "* ").slice(0, laneCount * 2 + 2)].forEach((char, charIndex) => {
-    const laneIndex = Math.max(0, Math.min(Math.floor(charIndex / 2), laneCount - 1));
-    const lane = lanes[laneIndex];
-    if (char === "|" || char === "*") {
-      lane.active = true;
+    const lane = Math.max(0, Math.min(Math.floor(charIndex / 2), laneCount - 1));
+    if (char === "|" || char === "*") token.active[lane] = true;
+    if (char === "*") token.nodes.push(lane);
+    if (char === "\\" && lane + 1 < laneCount) {
+      token.active[lane] = true;
+      token.active[lane + 1] = true;
+      token.diagonals.push({ from: lane, to: lane + 1 });
     }
-    if (char === "*") {
-      lane.node = true;
+    if (char === "/" && lane + 1 < laneCount) {
+      token.active[lane] = true;
+      token.active[lane + 1] = true;
+      token.diagonals.push({ from: lane + 1, to: lane });
     }
-    if (char === "\\") {
-      lane.active = true;
-      lane.down = true;
-      if (lanes[laneIndex + 1]) lanes[laneIndex + 1].active = true;
-    }
-    if (char === "/") {
-      lane.active = true;
-      lane.up = true;
-      if (lanes[laneIndex + 1]) lanes[laneIndex + 1].active = true;
-    }
-    if (char === "_" || char === "-") {
-      lane.active = true;
-      lane.horizontal = true;
+    if ((char === "_" || char === "-") && lane + 1 < laneCount) {
+      token.active[lane] = true;
+      token.active[lane + 1] = true;
+      token.horizontals.push({ from: lane, to: lane + 1 });
     }
   });
-
-  if (!lanes.some((lane) => lane.active || lane.node || lane.down || lane.up || lane.horizontal)) {
-    lanes[0].active = true;
-    lanes[0].node = true;
+  if (!token.nodes.length && !token.active.some(Boolean) && !token.diagonals.length) {
+    token.active[0] = true;
+    token.nodes.push(0);
   }
+  return token;
+}
+
+function renderCommitGraphSvg(layout) {
+  const palette = ["#8fe7ff", "#76efac", "#f9c75d", "#ff7aa8"];
+  const paths = [];
+  const nodes = [];
+
+  layout.tokens.forEach((token, index) => {
+    const top = layout.rowTops[index];
+    const bottom = top + layout.rowHeights[index];
+    const center = layout.centers[index];
+    token.active.forEach((active, lane) => {
+      if (!active) return;
+      const hasNode = token.nodes.includes(lane);
+      const y1 = index === 0 && hasNode ? center : top;
+      const y2 = index === layout.tokens.length - 1 && hasNode ? center : bottom;
+      paths.push(`<path class="graph-path lane-${lane}" d="M ${layout.laneX(lane)} ${y1} L ${layout.laneX(lane)} ${y2}" stroke="${palette[lane] || palette[0]}" />`);
+    });
+    token.diagonals.forEach((diag) => {
+      const fromX = layout.laneX(diag.from);
+      const toX = layout.laneX(diag.to);
+      const y1 = top + Math.max(4, layout.rowHeights[index] * 0.18);
+      const y2 = bottom - Math.max(4, layout.rowHeights[index] * 0.18);
+      paths.push(`<path class="graph-path diagonal lane-${diag.from}" d="M ${fromX} ${y1} C ${fromX} ${center}, ${toX} ${center}, ${toX} ${y2}" stroke="${palette[diag.from] || palette[0]}" />`);
+    });
+    token.horizontals.forEach((line) => {
+      paths.push(`<path class="graph-path horizontal lane-${line.from}" d="M ${layout.laneX(line.from)} ${center} L ${layout.laneX(line.to)} ${center}" stroke="${palette[line.from] || palette[0]}" />`);
+    });
+    token.nodes.forEach((lane) => {
+      nodes.push(`<circle class="graph-node node-halo lane-${lane}" cx="${layout.laneX(lane)}" cy="${center}" r="9" fill="${palette[lane] || palette[0]}" />`);
+      nodes.push(`<circle class="graph-node lane-${lane}" cx="${layout.laneX(lane)}" cy="${center}" r="5" fill="${palette[lane] || palette[0]}" />`);
+    });
+  });
 
   return `
-    <div class="graph-lanes" aria-hidden="true">
-      ${lanes.map((lane, laneIndex) => {
-        const classes = [
-          "graph-lane",
-          `lane-${laneIndex}`,
-          lane.active ? "active" : "",
-          lane.node ? "node" : "",
-          lane.down ? "diag-down" : "",
-          lane.up ? "diag-up" : "",
-          lane.horizontal ? "horizontal" : ""
-        ].filter(Boolean).join(" ");
-        return `
-          <span class="${classes}">
-            ${lane.down ? `<span class="graph-diagonal down"></span>` : ""}
-            ${lane.up ? `<span class="graph-diagonal up"></span>` : ""}
-            ${lane.horizontal ? `<span class="graph-horizontal"></span>` : ""}
-          </span>
-        `;
-      }).join("")}
-    </div>
+    <svg class="git-graph-svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">
+      ${paths.join("")}
+      ${nodes.join("")}
+    </svg>
   `;
 }
 

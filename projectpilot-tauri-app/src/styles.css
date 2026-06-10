@@ -844,7 +844,6 @@ td span,
 
 .commit-graph {
   display: grid;
-  gap: 0;
 }
 
 .commit-graph.topology {
@@ -857,150 +856,57 @@ td span,
   overflow: hidden;
 }
 
-.commit-graph-row {
+.commit-graph.svg-layout {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.git-graph-svg {
+  display: block;
+  justify-self: center;
+  overflow: visible;
+}
+
+.graph-path {
+  fill: none;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.82;
+  filter: drop-shadow(0 0 4px rgba(143, 231, 255, 0.18));
+}
+
+.graph-path.diagonal {
+  opacity: 0.68;
+}
+
+.graph-node {
+  filter: drop-shadow(0 0 7px rgba(143, 231, 255, 0.34));
+}
+
+.graph-node.node-halo {
+  opacity: 0.18;
+}
+
+.commit-list {
+  display: grid;
+}
+
+.commit-list-row {
+  display: flex;
+  align-items: center;
   min-width: 0;
 }
 
-.commit-graph-row.connector {
-  min-height: 18px;
-}
-
-.commit-graph-row.has-commit {
-  min-height: 52px;
-  padding-bottom: 6px;
-}
-
-.commit-graph-row.is-last {
-  padding-bottom: 0;
-}
-
-.graph-lanes {
-  display: grid;
-  grid-template-columns: repeat(4, 12px);
-  width: 48px;
-  min-height: 100%;
-  padding-left: 4px;
-  align-self: stretch;
-  justify-self: start;
-}
-
-.graph-lane {
-  --graph-color: #8fe7ff;
-  --graph-glow: rgba(143, 231, 255, 0.2);
-  position: relative;
-  min-height: 100%;
-}
-
-.graph-lane.active::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: var(--graph-color);
-  box-shadow: 0 0 10px var(--graph-glow);
-  opacity: 0.86;
-}
-
-.commit-graph-row.is-first .graph-lane.active::before {
-  top: 18px;
-}
-
-.commit-graph-row.is-last .graph-lane.active::before {
-  bottom: calc(100% - 20px);
-}
-
-.graph-lane.node::after {
-  content: "";
-  position: absolute;
-  top: 17px;
-  left: 50%;
-  width: 14px;
-  height: 14px;
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
-  background: var(--graph-color);
-  box-shadow: 0 0 0 5px rgba(143, 231, 255, 0.12), 0 0 18px var(--graph-glow);
-  z-index: 3;
-}
-
-.commit-graph-row.has-commit .graph-lane.node::after {
-  top: 20px;
-}
-
-.graph-diagonal,
-.graph-horizontal {
-  position: absolute;
-  z-index: 2;
-  display: block;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--graph-color);
-  box-shadow: 0 0 9px var(--graph-glow);
-  opacity: 0.78;
+.commit-list-row.connector {
   pointer-events: none;
-}
-
-.graph-diagonal {
-  left: 50%;
-  width: 14px;
-  top: 50%;
-  transform-origin: left center;
-}
-
-.graph-diagonal.down {
-  transform: rotate(44deg);
-}
-
-.graph-diagonal.up {
-  transform: rotate(-44deg);
-}
-
-.graph-horizontal {
-  left: 50%;
-  right: -50%;
-  top: 50%;
-}
-
-.graph-lane.lane-0 {
-  --graph-color: #8fe7ff;
-  --graph-glow: rgba(143, 231, 255, 0.2);
-}
-
-.graph-lane.lane-1 {
-  --graph-color: #76efac;
-  --graph-glow: rgba(118, 239, 172, 0.18);
-}
-
-.graph-lane.lane-2 {
-  --graph-color: #f9c75d;
-  --graph-glow: rgba(249, 199, 93, 0.18);
-}
-
-.graph-lane.lane-3 {
-  --graph-color: #ff7aa8;
-  --graph-glow: rgba(255, 122, 168, 0.16);
-}
-
-.graph-lane.lane-4 {
-  --graph-color: #a88dff;
-  --graph-glow: rgba(168, 141, 255, 0.16);
-}
-
-.graph-lane.lane-5 {
-  --graph-color: #ffb86b;
-  --graph-glow: rgba(255, 184, 107, 0.16);
 }
 
 .commit-card {
   display: grid;
+  width: 100%;
   min-width: 0;
   gap: 5px;
   margin-bottom: 0;
