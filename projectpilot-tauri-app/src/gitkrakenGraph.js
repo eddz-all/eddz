@@ -8,6 +8,7 @@ import GraphContainer, {
   commitNodeType,
   commitShaZone,
   commitZone,
+  graphCommitDescDisplayModes,
   mergeNodeType,
   refZone
 } from "@gitkraken/gitkraken-components";
@@ -101,7 +102,7 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
       rowsStats,
       shaLength: 7,
       platform: "darwin",
-      graphCommitDescDisplayMode: "compact",
+      graphCommitDescDisplayMode: graphCommitDescDisplayModes.NEVER,
       highlightRowsOnRefHover: true,
       showRemoteNamesOnRefs: true,
       suppressNonRefRowTooltips: true,
@@ -119,35 +120,35 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
     const width = Number(containerWidth) || 0;
     if (width < 980) {
       return {
-        [commitZone]: { width: 44, isHidden: false, mode: "compact", order: 0 },
-        [commitMessageZone]: { width: 430, isHidden: false, order: 1 },
-        [refZone]: { width: 340, isHidden: false, order: 2 },
+        [commitZone]: { width: 42, isHidden: false, mode: "compact", order: 0 },
+        [commitMessageZone]: { width: 440, isHidden: false, order: 1 },
+        [refZone]: { width: 260, isHidden: false, order: 2 },
         [commitAuthorZone]: { width: 92, isHidden: true, order: 3 },
         [commitDateTimeZone]: { width: 96, isHidden: true, order: 4 },
-        [commitShaZone]: { width: 72, isHidden: false, order: 5 },
+        [commitShaZone]: { width: 64, isHidden: false, order: 5 },
         [changesZone]: { width: 72, isHidden: true, order: 6 }
       };
     }
 
     if (width < 1220) {
       return {
-        [commitZone]: { width: 52, isHidden: false, mode: "compact", order: 0 },
-        [commitMessageZone]: { width: 470, isHidden: false, order: 1 },
-        [refZone]: { width: 350, isHidden: false, order: 2 },
+        [commitZone]: { width: 46, isHidden: false, mode: "compact", order: 0 },
+        [commitMessageZone]: { width: 500, isHidden: false, order: 1 },
+        [refZone]: { width: 310, isHidden: false, order: 2 },
         [commitAuthorZone]: { width: 108, isHidden: true, order: 3 },
-        [commitDateTimeZone]: { width: 92, isHidden: false, order: 4 },
-        [commitShaZone]: { width: 72, isHidden: false, order: 5 },
+        [commitDateTimeZone]: { width: 92, isHidden: true, order: 4 },
+        [commitShaZone]: { width: 68, isHidden: false, order: 5 },
         [changesZone]: { width: 72, isHidden: true, order: 6 }
       };
     }
 
     return {
-      [commitZone]: { width: 60, isHidden: false, mode: "compact", order: 0 },
-      [commitMessageZone]: { width: 440, isHidden: false, order: 1 },
-      [refZone]: { width: 460, isHidden: false, order: 2 },
-      [commitAuthorZone]: { width: 124, isHidden: false, order: 3 },
-      [commitDateTimeZone]: { width: 104, isHidden: false, order: 4 },
-      [commitShaZone]: { width: 76, isHidden: false, order: 5 },
+      [commitZone]: { width: 50, isHidden: false, mode: "compact", order: 0 },
+      [commitMessageZone]: { width: 540, isHidden: false, order: 1 },
+      [refZone]: { width: 360, isHidden: false, order: 2 },
+      [commitAuthorZone]: { width: 124, isHidden: true, order: 3 },
+      [commitDateTimeZone]: { width: 92, isHidden: false, order: 4 },
+      [commitShaZone]: { width: 70, isHidden: false, order: 5 },
       [changesZone]: { width: 72, isHidden: true, order: 6 }
     };
   }

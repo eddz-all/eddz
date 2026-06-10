@@ -3692,7 +3692,7 @@ function renderCommitGraph(repo) {
     ...repo,
     commits
   });
-  const height = Math.max(360, Math.min(720, 78 + commits.length * 30));
+  const height = Math.max(300, Math.min(520, 34 + commits.length * 28));
   return `
     <div class="gitkraken-graph-shell" data-gitkraken-graph-shell="${mountId}" style="--gitkraken-graph-height: ${height}px">
       <div class="gitkraken-graph-mount" data-gitkraken-graph="${mountId}"></div>

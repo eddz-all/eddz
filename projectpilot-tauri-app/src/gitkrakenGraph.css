@@ -14,9 +14,9 @@
 .gitkraken-graph-mount {
   display: none;
   width: 100%;
-  min-width: 860px;
+  min-width: 760px;
   height: var(--gitkraken-graph-height, 460px);
-  min-height: 360px;
+  min-height: 300px;
   overflow: hidden;
   contain: paint;
 }
@@ -37,8 +37,15 @@
 .gitkraken-graph-mount .gk-graph {
   width: 100%;
   height: 100%;
-  min-width: 860px;
+  min-width: 760px;
   overflow: hidden;
+  --fs-1: 1.1rem;
+  --fs-2: 1.2rem;
+  --fs-3: 1.3rem;
+  --fs-4: 1.3rem;
+  --fs-5: 1.4rem;
+  --fs-6: 1.4rem;
+  --fs-7: 1.5rem;
   --app__bg0: rgba(6, 11, 22, 0.88);
   --panel__bg0: rgba(9, 15, 29, 0.92);
   --panel__bg1: rgba(13, 21, 38, 0.96);
@@ -75,6 +82,53 @@
   --graph-color-3-bg50: rgba(255, 122, 168, 0.34);
   --graph-color-4-bg50: rgba(159, 140, 255, 0.34);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.gitkraken-graph-mount .gk-graph .h1,
+.gitkraken-graph-mount .gk-graph .h2,
+.gitkraken-graph-mount .gk-graph .h3,
+.gitkraken-graph-mount .gk-graph .h4,
+.gitkraken-graph-mount .gk-graph .h5,
+.gitkraken-graph-mount .gk-graph .h6 {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.gitkraken-graph-mount .gk-graph .fs-1 {
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.gitkraken-graph-mount .gk-graph .graph-header-row,
+.gitkraken-graph-mount .gk-graph .graph-header-row *,
+.gitkraken-graph-mount .gk-graph .text-disabled.text-ellipsis {
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.03em;
+}
+
+.gitkraken-graph-mount .message-zone--summary {
+  color: #dbe6fa;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.gitkraken-graph-mount .graph-row-wrapper,
+.gitkraken-graph-mount .graph-zone {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.gitkraken-graph-mount .commit-sha-zone .font-monospace,
+.gitkraken-graph-mount .commit-sha-zone .graph-zone,
+.gitkraken-graph-mount .font-monospace.pointer,
+.gitkraken-graph-mount .graph-row-wrapper:has(.font-monospace.pointer) {
+  color: rgba(184, 240, 255, 0.72);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .gitkraken-graph-mount .graph-adjust-commit-count {
@@ -90,16 +144,16 @@
 }
 
 .gitkraken-graph-mount .ref-node {
-  min-height: 20px;
-  padding: 0 8px;
+  min-height: 18px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .gitkraken-graph-mount .ref-name {
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .gitkraken-icon {
