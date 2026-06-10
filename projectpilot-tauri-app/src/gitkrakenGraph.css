@@ -93,6 +93,8 @@
 .gitkraken-graph-mount .gk-graph *,
 .gitkraken-graph-mount .gk-graph *::before,
 .gitkraken-graph-mount .gk-graph *::after {
+  animation: none !important;
+  transition: none !important;
   -webkit-user-select: none !important;
   user-select: none !important;
 }
@@ -145,9 +147,19 @@
     0 0 0 3px rgba(112, 199, 220, 0.08);
   color: transparent !important;
   font-size: 0 !important;
+  pointer-events: none !important;
   text-shadow: none;
-  transform: scale(0.72);
+  transform: scale(0.72) !important;
   transform-origin: center;
+}
+
+.gitkraken-graph-mount .commit-zone .avatar.node:hover,
+.gitkraken-graph-mount .commit-zone .avatar.node:focus,
+.gitkraken-graph-mount .commit-zone .avatar.node:active {
+  box-shadow:
+    0 0 0 2px rgba(6, 11, 22, 0.9),
+    0 0 0 3px rgba(112, 199, 220, 0.08) !important;
+  transform: scale(0.72) !important;
 }
 
 .gitkraken-graph-mount .commit-zone.column-1 .avatar.node {
@@ -162,8 +174,15 @@
 .gitkraken-graph-mount .commit-zone .node.merge-node {
   background-color: rgba(112, 199, 220, 0.88) !important;
   box-shadow: 0 0 0 2px rgba(6, 11, 22, 0.9);
-  transform: scale(0.82);
+  transform: scale(0.82) !important;
   transform-origin: center;
+}
+
+.gitkraken-graph-mount .commit-zone .node.merge-node:hover,
+.gitkraken-graph-mount .commit-zone .node.merge-node:focus,
+.gitkraken-graph-mount .commit-zone .node.merge-node:active {
+  box-shadow: 0 0 0 2px rgba(6, 11, 22, 0.9) !important;
+  transform: scale(0.82) !important;
 }
 
 .gitkraken-graph-mount .scrollbar-outer.horizontal,
@@ -192,12 +211,23 @@
 .gitkraken-graph-mount .gk-graph.ref-zone {
   align-items: center !important;
   overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+.gitkraken-graph-mount .gk-graph .ref-zone *,
+.gitkraken-graph-mount .gk-graph.ref-zone * {
+  pointer-events: none !important;
 }
 
 .gitkraken-graph-mount .gk-graph .ref-zone > .flex,
 .gitkraken-graph-mount .gk-graph .ref-nodes,
-.gitkraken-graph-mount .gk-graph .ref-node-wrapper {
+.gitkraken-graph-mount .gk-graph .ref-node-wrapper,
+.gitkraken-graph-mount .gk-graph .ref-node-wrapper:hover,
+.gitkraken-graph-mount .gk-graph .ref-node-wrapper.hovering,
+.gitkraken-graph-mount .gk-graph .ref-zone .dnd-component.hovering,
+.gitkraken-graph-mount .gk-graph .ref-zone .dnd-component.droppable {
   align-items: center !important;
+  box-shadow: none !important;
   flex: 0 1 auto !important;
   width: max-content !important;
   min-width: 0 !important;
@@ -208,6 +238,7 @@
   font-size: 11px !important;
   line-height: 16px !important;
   text-overflow: ellipsis !important;
+  transform: none !important;
   white-space: nowrap !important;
 }
 
@@ -224,30 +255,41 @@
   white-space: nowrap !important;
 }
 
-.gitkraken-graph-mount .gk-graph .ref-zone .ref-node,
-.gitkraken-graph-mount .gk-graph.ref-zone .ref-node,
-.gitkraken-graph-mount .gk-graph .ref-zone .ref-node:hover,
-.gitkraken-graph-mount .gk-graph .ref-zone .ref-node:focus,
-.gitkraken-graph-mount .gk-graph .ref-zone .ref-node.has-active,
-.gitkraken-graph-mount .gk-graph .ref-zone .ref-node.is-active {
+.gitkraken-graph-mount .gk-graph .ref-node,
+.gitkraken-graph-mount .gk-graph .ref-node:hover,
+.gitkraken-graph-mount .gk-graph .ref-node:focus,
+.gitkraken-graph-mount .gk-graph .ref-node:active,
+.gitkraken-graph-mount .gk-graph .ref-node.has-active,
+.gitkraken-graph-mount .gk-graph .ref-node.is-active,
+.gitkraken-graph-mount .gk-graph .ref-node.selected {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   box-sizing: border-box !important;
-  max-width: 100% !important;
+  width: max-content !important;
+  min-width: 0 !important;
+  max-width: 170px !important;
   height: 18px !important;
   min-height: 18px !important;
   max-height: 18px !important;
   padding: 0 7px !important;
+  border: 1px solid rgba(105, 211, 155, 0.16) !important;
   border-radius: 999px !important;
   overflow: hidden !important;
+  background: rgba(105, 211, 155, 0.12) !important;
   color: rgba(219, 230, 250, 0.92) !important;
   font-size: 11px !important;
   font-weight: 750 !important;
   line-height: 16px !important;
+  box-shadow: none !important;
   text-overflow: ellipsis !important;
+  transform: none !important;
   white-space: nowrap !important;
 }
 
-.gitkraken-graph-mount .gk-graph .ref-zone .ref-node *,
-.gitkraken-graph-mount .gk-graph.ref-zone .ref-node * {
+.gitkraken-graph-mount .gk-graph .ref-node *,
+.gitkraken-graph-mount .gk-graph .ref-node *::before,
+.gitkraken-graph-mount .gk-graph .ref-node *::after {
   min-width: 0 !important;
   max-width: 100% !important;
   overflow: hidden !important;

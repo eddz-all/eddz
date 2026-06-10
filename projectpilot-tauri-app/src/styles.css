@@ -765,6 +765,22 @@ td span,
 .git-graph-panel {
   display: grid;
   gap: 14px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.git-graph-panel *,
+.git-graph-panel *::before,
+.git-graph-panel *::after {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+}
+
+.git-graph-panel ::selection {
+  background: transparent !important;
+  color: inherit !important;
 }
 
 .repo-graph-list {
