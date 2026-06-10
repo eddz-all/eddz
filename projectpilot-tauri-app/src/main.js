@@ -1654,8 +1654,8 @@ async function request(path, options = {}, fallback) {
     return localResult === null ? fallback : localResult;
   }
 
-  const shouldUseProxy = shouldProxyApiBase(state.apiBase);
-  const invoke = shouldUseProxy ? null : tauriInvoke();
+  const invoke = tauriInvoke();
+  const shouldUseProxy = !invoke && shouldProxyApiBase(state.apiBase);
   const url = shouldUseProxy ? `${LOCAL_API_PROXY_BASE}${path}` : `${state.apiBase}${path}`;
   const headers = {
     ...(options.headers || {})
