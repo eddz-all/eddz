@@ -124,10 +124,10 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
   function graphColumns(containerWidth) {
     const width = Number(containerWidth) || 0;
     if (width < 720) {
-      const commitWidth = 38;
+      const commitWidth = 64;
       const refWidth = 190;
       return {
-        [commitZone]: { width: commitWidth, isHidden: false, mode: "compact", order: 0 },
+        [commitZone]: { width: commitWidth, isHidden: false, mode: "rich", order: 0 },
         [commitMessageZone]: { width: fillMessageColumn(width, commitWidth, refWidth), isHidden: false, order: 1 },
         [refZone]: { width: refWidth, isHidden: false, order: 2 },
         [commitAuthorZone]: { width: 92, isHidden: true, order: 3 },
@@ -138,11 +138,11 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
     }
 
     if (width < 980) {
-      const commitWidth = 42;
+      const commitWidth = 78;
       const refWidth = 220;
       const shaWidth = 68;
       return {
-        [commitZone]: { width: commitWidth, isHidden: false, mode: "compact", order: 0 },
+        [commitZone]: { width: commitWidth, isHidden: false, mode: "rich", order: 0 },
         [commitMessageZone]: { width: fillMessageColumn(width, commitWidth, refWidth, shaWidth), isHidden: false, order: 1 },
         [refZone]: { width: refWidth, isHidden: false, order: 2 },
         [commitAuthorZone]: { width: 92, isHidden: true, order: 3 },
@@ -153,11 +153,11 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
     }
 
     if (width < 1220) {
-      const commitWidth = 46;
+      const commitWidth = 92;
       const refWidth = 260;
       const shaWidth = 72;
       return {
-        [commitZone]: { width: commitWidth, isHidden: false, mode: "compact", order: 0 },
+        [commitZone]: { width: commitWidth, isHidden: false, mode: "rich", order: 0 },
         [commitMessageZone]: { width: fillMessageColumn(width, commitWidth, refWidth, shaWidth), isHidden: false, order: 1 },
         [refZone]: { width: refWidth, isHidden: false, order: 2 },
         [commitAuthorZone]: { width: 108, isHidden: true, order: 3 },
@@ -167,12 +167,12 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
       };
     }
 
-    const commitWidth = 50;
+    const commitWidth = 108;
     const refWidth = 320;
     const dateWidth = 86;
     const shaWidth = 72;
     return {
-      [commitZone]: { width: commitWidth, isHidden: false, mode: "compact", order: 0 },
+      [commitZone]: { width: commitWidth, isHidden: false, mode: "rich", order: 0 },
       [commitMessageZone]: { width: fillMessageColumn(width, commitWidth, refWidth, shaWidth, dateWidth), isHidden: false, order: 1 },
       [refZone]: { width: refWidth, isHidden: false, order: 2 },
       [commitAuthorZone]: { width: 124, isHidden: true, order: 3 },

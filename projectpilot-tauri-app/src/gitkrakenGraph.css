@@ -122,6 +122,12 @@
   line-height: 18px;
 }
 
+.gitkraken-graph-mount .commit-zone .avatar.node {
+  color: transparent !important;
+  font-size: 0 !important;
+  text-shadow: none;
+}
+
 .gitkraken-graph-mount .commit-sha-zone .font-monospace,
 .gitkraken-graph-mount .commit-sha-zone .graph-zone,
 .gitkraken-graph-mount .font-monospace.pointer,
