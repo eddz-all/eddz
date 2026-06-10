@@ -3679,10 +3679,20 @@ function renderCommitGraph(repo) {
   const rows = commitGraphRows(repo, commits);
   const layout = buildGraphSvgLayout(rows);
   return `
-    <div class="commit-graph topology svg-layout">
-      ${renderCommitGraphSvg(layout)}
-      <div class="commit-list">
-        ${rows.map((row, index) => renderCommitGraphRow(row, index, layout.rowHeights[index])).join("")}
+    <div class="commit-graph topology gitlens-layout">
+      <div class="gitlens-graph-header" aria-hidden="true">
+        <span>Graph</span>
+        <span>Message</span>
+        <span>Refs</span>
+        <span>Author</span>
+        <span>Date</span>
+        <span>Hash</span>
+      </div>
+      <div class="gitlens-graph-body">
+        ${renderCommitGraphSvg(layout)}
+        <div class="commit-list">
+          ${rows.map((row, index) => renderCommitGraphRow(row, index, layout.rowHeights[index])).join("")}
+        </div>
       </div>
     </div>
   `;
@@ -3734,28 +3744,23 @@ function renderCommitGraphRow(row, index, rowHeight) {
   const rowClasses = [
     "commit-list-row",
     commit ? "has-commit" : "connector",
+    commit?.is_head ? "head" : "",
+    commit?.is_merge ? "merge" : "",
   ].filter(Boolean).join(" ");
   if (!commit) {
     return `<div class="${rowClasses}" style="height: ${rowHeight}px"></div>`;
   }
   const refs = commit.refs || [];
-  const cardClasses = ["commit-card", commit.is_head ? "head" : "", commit.is_merge ? "merge" : ""]
-    .filter(Boolean)
-    .join(" ");
   return `
     <article class="${rowClasses}" style="height: ${rowHeight}px">
-      <div class="${cardClasses}">
-        <div class="commit-title">
-          <strong>${escapeHtml(displayValue(commit.subject))}</strong>
-          <code>${escapeHtml(displayValue(commit.short_hash || String(commit.hash || "").slice(0, 7)))}</code>
-        </div>
-        <div class="commit-meta">
-          <span>${escapeHtml(displayValue(commit.author))}</span>
-          <span>${escapeHtml(displayValue(commit.relative_time))}</span>
-          ${commit.is_merge ? `<span class="badge warning">merge</span>` : ""}
-        </div>
-        ${refs.length ? `<div class="ref-row">${renderRefPills(refs, { showEmpty: false, limit: 3 })}</div>` : ""}
+      <div class="commit-message-cell">
+        <strong class="commit-subject">${escapeHtml(displayValue(commit.subject))}</strong>
+        ${commit.is_merge ? `<span class="badge warning compact">merge</span>` : ""}
       </div>
+      <div class="commit-refs-cell">${refs.length ? renderRefPills(refs, { showEmpty: false, limit: 2 }) : ""}</div>
+      <span class="commit-author">${escapeHtml(displayValue(commit.author))}</span>
+      <span class="commit-date">${escapeHtml(displayValue(commit.relative_time))}</span>
+      <code class="commit-hash">${escapeHtml(displayValue(commit.short_hash || String(commit.hash || "").slice(0, 7)))}</code>
     </article>
   `;
 }
@@ -3765,7 +3770,7 @@ function buildGraphSvgLayout(rows) {
   const laneGap = 13;
   const paddingX = 8;
   const width = paddingX * 2 + (laneCount - 1) * laneGap + 16;
-  const rowHeights = rows.map((row) => (row.commit ? 62 : 22));
+  const rowHeights = rows.map((row) => (row.commit ? 42 : 18));
   const rowTops = [];
   let height = 0;
   rowHeights.forEach((rowHeight) => {

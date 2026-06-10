@@ -804,7 +804,7 @@ td span,
 }
 
 .repo-graph-body {
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.65fr);
   align-items: start;
 }
 
@@ -847,7 +847,6 @@ td span,
 }
 
 .commit-graph.topology {
-  padding: 8px;
   border: 1px solid rgba(145, 158, 187, 0.12);
   border-radius: 8px;
   background:
@@ -856,11 +855,32 @@ td span,
   overflow: hidden;
 }
 
-.commit-graph.svg-layout {
+.commit-graph.gitlens-layout {
+  display: grid;
+  min-width: 0;
+}
+
+.gitlens-graph-header {
+  display: grid;
+  grid-template-columns: 58px minmax(118px, 1.35fr) minmax(96px, 0.9fr) 66px 62px 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(145, 158, 187, 0.12);
+  color: #7f8ca5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gitlens-graph-body {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
+  padding: 4px 8px 8px;
 }
 
 .git-graph-svg {
@@ -892,79 +912,95 @@ td span,
 
 .commit-list {
   display: grid;
+  min-width: 0;
 }
 
 .commit-list-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(118px, 1.35fr) minmax(96px, 0.9fr) 66px 62px 58px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
+  border-bottom: 1px solid rgba(145, 158, 187, 0.08);
+  color: #dbe6fa;
+  font-size: 11px;
 }
 
 .commit-list-row.connector {
+  border-bottom: 0;
   pointer-events: none;
 }
 
-.commit-card {
-  display: grid;
-  width: 100%;
-  min-width: 0;
-  gap: 5px;
-  margin-bottom: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(145, 158, 187, 0.12);
-  border-radius: 6px;
-  background: rgba(18, 25, 43, 0.58);
+.commit-list-row.has-commit {
+  padding: 0 8px;
+  border-radius: 4px;
 }
 
-.commit-card.head {
-  border-color: rgba(118, 239, 172, 0.3);
-  background: rgba(15, 45, 38, 0.38);
+.commit-list-row.has-commit:hover {
+  background: rgba(145, 158, 187, 0.08);
 }
 
-.commit-card.merge {
-  border-color: rgba(249, 199, 93, 0.28);
-  background: linear-gradient(135deg, rgba(249, 199, 93, 0.1), rgba(18, 25, 43, 0.74));
+.commit-list-row.head {
+  background: rgba(15, 45, 38, 0.34);
 }
 
-.commit-title,
-.commit-meta {
+.commit-list-row.merge {
+  color: #cfd8ea;
+}
+
+.commit-message-cell,
+.commit-refs-cell {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
 }
 
-.commit-title strong {
+.commit-subject,
+.commit-author,
+.commit-date,
+.commit-hash {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
-  line-height: 1.3;
 }
 
-.commit-title code {
-  flex: 0 0 auto;
+.commit-subject {
+  color: #eef4ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.commit-author,
+.commit-date {
+  color: #9ca8bd;
+}
+
+.commit-hash {
+  justify-self: end;
   color: #b8f0ff;
   font-size: 11px;
 }
 
-.commit-meta {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 6px;
-  color: #93a0b8;
-  font-size: 11px;
-}
-
-.commit-card .ref-row {
-  gap: 5px;
-}
-
-.commit-card .ref-pill {
+.badge.compact {
+  display: flex;
+  align-items: center;
   min-height: 18px;
   padding: 0 6px;
   font-size: 10px;
+}
+
+.commit-refs-cell .ref-pill {
+  max-width: 86px;
+  flex: 0 1 auto;
+  min-height: 18px;
+  padding: 0 6px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ref-pill.more {
