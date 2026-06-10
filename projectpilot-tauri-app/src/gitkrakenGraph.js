@@ -106,9 +106,9 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
       shaLength: 7,
       platform: "darwin",
       graphCommitDescDisplayMode: graphCommitDescDisplayModes.NEVER,
-      highlightRowsOnRefHover: true,
+      highlightRowsOnRefHover: false,
       pinnedBranchFullName: pinnedBranchFullName(repo),
-      showRemoteNamesOnRefs: true,
+      showRemoteNamesOnRefs: false,
       suppressNonRefRowTooltips: true,
       translate: translateGraphLabel,
       useAuthorInitialsForAvatars: true,
@@ -196,6 +196,32 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
     return branch && branch !== "detached HEAD" ? `refs/heads/${branch}` : null;
   }
 
+  function primaryGraphRefs(refs, repo) {
+    const safeRefs = refs.filter((ref) => ref && ref.name);
+    if (safeRefs.length <= 1) return safeRefs;
+
+    const currentBranch = displayValue(repo.branch || "");
+    const scoreRef = (ref) => {
+      const type = String(ref.type || "");
+      const name = String(ref.name || "");
+      if (type === "branch" && ref.is_head) return 0;
+      if (type === "branch" && currentBranch && name === currentBranch) return 1;
+      if (type === "branch" && !name.includes("/")) return 2;
+      if (type === "tag") return 3;
+      if (type === "branch") return 4;
+      if (type === "remote") return 5;
+      return 6;
+    };
+
+    return [...safeRefs]
+      .sort((left, right) => {
+        const scoreDelta = scoreRef(left) - scoreRef(right);
+        if (scoreDelta !== 0) return scoreDelta;
+        return String(left.name || "").localeCompare(String(right.name || ""));
+      })
+      .slice(0, 1);
+  }
+
   function translateGraphLabel(key, ...args) {
     const labels = {
       "GraphHeader-CommitMessage": "COMMIT",
@@ -233,7 +259,8 @@ export function createGitKrakenGraphRenderer({ displayValue, parseTimestamp, set
 
   function toGraphRows(repo) {
     return (repo.commits || []).map((commit, index) => {
-      const refs = Array.isArray(commit.refs) ? commit.refs : [];
+      const allRefs = Array.isArray(commit.refs) ? commit.refs : [];
+      const refs = primaryGraphRefs(allRefs, repo);
       const heads = refs
         .filter((ref) => ref.type === "branch")
         .map((ref) => ({
