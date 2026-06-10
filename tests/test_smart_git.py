@@ -82,6 +82,69 @@ class SmartGitTests(unittest.TestCase):
             self.assertIn("map", analysis["reports"])
             self.assertIn("sync_plan", analysis["reports"])
             self.assertIn("commit_plan", analysis["reports"])
+            self.assertIn("issue_report", analysis)
+            self.assertEqual(analysis["issue_report"]["schema_version"], "git-issues.v1")
+            self.assertEqual(len(analysis["playbook"]), 10)
+
+    def test_analyze_repository_classifies_merge_conflict(self) -> None:
+        with git_repo() as repo:
+            run(["git", "switch", "-c", "feature"], repo)
+            (repo / "tracked.txt").write_text("feature\n", encoding="utf-8")
+            run(["git", "commit", "-am", "feature change"], repo)
+            run(["git", "switch", "main"], repo)
+            (repo / "tracked.txt").write_text("main\n", encoding="utf-8")
+            run(["git", "commit", "-am", "main change"], repo)
+            result = subprocess.run(
+                ["git", "merge", "feature"],
+                cwd=str(repo),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+
+            analysis = analyze_repository(repo)
+            issue_codes = {item["code"] for item in analysis["issues"]}
+
+            self.assertIn("merge_conflict", issue_codes)
+            self.assertEqual(analysis["risk"], "high")
+
+    def test_analyze_repository_classifies_dirty_behind_branch(self) -> None:
+        with remote_git_repo() as repo:
+            create_remote_commit(repo, "remote.txt", "remote\n", "remote commit")
+            run(["git", "fetch"], repo)
+            (repo / "tracked.txt").write_text("local draft\n", encoding="utf-8")
+
+            analysis = analyze_repository(repo)
+            issue_codes = {item["code"] for item in analysis["issues"]}
+
+            self.assertIn("local_changes_block", issue_codes)
+            self.assertIn("push_rejected", issue_codes)
+
+    def test_analyze_repository_classifies_detached_head(self) -> None:
+        with git_repo() as repo:
+            run(["git", "checkout", "--detach", "HEAD"], repo)
+
+            analysis = analyze_repository(repo)
+            issue_codes = {item["code"] for item in analysis["issues"]}
+
+            self.assertIn("detached_head", issue_codes)
+
+    def test_analyze_repository_classifies_accidental_and_tracked_ignored_files(self) -> None:
+        with git_repo() as repo:
+            (repo / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+            (repo / "dist").mkdir()
+            (repo / "dist" / "bundle.js").write_text("compiled\n", encoding="utf-8")
+            run(["git", "add", "dist/bundle.js"], repo)
+            run(["git", "commit", "-m", "track generated output"], repo)
+            (repo / "dist" / "bundle.js").write_text("compiled again\n", encoding="utf-8")
+
+            analysis = analyze_repository(repo)
+            issue_codes = {item["code"] for item in analysis["issues"]}
+
+            self.assertIn("accidental_files", issue_codes)
+            self.assertIn("gitignore_not_effective", issue_codes)
 
     def test_analyze_cli_accepts_include_aliases(self) -> None:
         with git_repo() as repo:
@@ -176,4 +239,3 @@ def run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 if __name__ == "__main__":
     unittest.main()
-

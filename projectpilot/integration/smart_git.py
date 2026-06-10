@@ -5,6 +5,7 @@ from typing import Any
 
 from projectpilot.git.commit_planner import build_commit_plan
 from projectpilot.git.doctor import build_doctor_report
+from projectpilot.git.issue_classifier import classify_git_issues
 from projectpilot.git.inspector import NotGitRepositoryError, inspect_repository
 from projectpilot.git.state_map import build_state_map
 from projectpilot.git.sync_planner import build_sync_plan
@@ -42,6 +43,8 @@ def analyze_repository(project_path: str | Path, analyses: list[str] | None = No
             "risk": "low",
             "state": status.state,
             "reports": {},
+            "issues": [],
+            "playbook": [],
             "operation_plans": [],
             "blocked_operations": [],
             "next_steps": [],
@@ -66,10 +69,20 @@ def analyze_repository(project_path: str | Path, analyses: list[str] | None = No
             payload["next_steps"].extend(sync_plan.next_steps)
             payload["warnings"].extend(sync_plan.warnings)
             payload["risk"] = max_risk(payload["risk"], sync_plan.risk)
+        commit_plan = None
         if "commit_plan" in requested:
             commit_plan = build_commit_plan(status.repo_path)
             payload["reports"]["commit_plan"] = commit_plan.to_dict()
             payload["warnings"].extend(commit_plan.warnings)
+
+        issue_report = classify_git_issues(status, commit_plan=commit_plan)
+        payload["issue_report"] = issue_report
+        payload["issues"] = issue_report["issues"]
+        payload["playbook"] = issue_report["playbook"]
+        if any(issue.get("severity") == "high" for issue in payload["issues"]):
+            payload["risk"] = max_risk(payload["risk"], "high")
+        elif any(issue.get("severity") == "medium" for issue in payload["issues"]):
+            payload["risk"] = max_risk(payload["risk"], "medium")
 
         payload["next_steps"] = unique_strings(payload["next_steps"])
         payload["warnings"] = unique_strings(payload["warnings"])
@@ -133,4 +146,3 @@ def unique_dicts(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(marker)
         result.append(item)
     return result
-

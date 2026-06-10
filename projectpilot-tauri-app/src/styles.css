@@ -552,13 +552,17 @@ td span,
 
 .git-plan-list,
 .git-analysis-summary,
-.git-operation-list {
+.git-operation-list,
+.git-active-issues,
+.git-repair-list {
   display: grid;
   gap: 12px;
 }
 
 .git-plan-card,
-.git-operation {
+.git-operation,
+.git-issue-card,
+.git-repair-option {
   border: 1px solid rgba(145, 158, 187, 0.14);
   border-radius: 8px;
   background: rgba(18, 25, 43, 0.72);
@@ -640,6 +644,87 @@ td span,
 
 .git-operation > .badge {
   flex: 0 0 auto;
+}
+
+.git-issue-board {
+  display: grid;
+  gap: 14px;
+}
+
+.compact-header {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.git-active-issues {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.git-playbook-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.git-issue-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.git-issue-card.active {
+  border-color: rgba(249, 199, 93, 0.3);
+  background: rgba(42, 34, 18, 0.34);
+}
+
+.git-issue-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.git-issue-title strong,
+.git-issue-title small {
+  display: block;
+}
+
+.git-issue-title small {
+  color: #93a0b8;
+}
+
+.git-issue-card p {
+  margin: 0;
+  color: #c6d1e6;
+}
+
+.git-evidence-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #a8b3c7;
+}
+
+.git-repair-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(8, 13, 24, 0.64);
+}
+
+.git-repair-option code {
+  display: block;
+  color: #b8f0ff;
+  overflow-wrap: anywhere;
+}
+
+.git-guardrail {
+  padding: 10px;
+  border-left: 3px solid #f9c75d;
+  background: rgba(249, 199, 93, 0.08);
 }
 
 .git-operation.blocked {
@@ -1315,6 +1400,10 @@ code,
   .steps {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
+
+  .git-playbook-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -1386,6 +1475,12 @@ code,
   }
 
   .git-analysis-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .git-playbook-grid,
+  .git-active-issues,
+  .git-repair-option {
     grid-template-columns: 1fr;
   }
 

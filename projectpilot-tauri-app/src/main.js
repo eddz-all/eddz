@@ -8,6 +8,117 @@ const LOCAL_DEMO_KEY = "projectpilot.localDemo.v1";
 const MISSING_VALUE = "未返回";
 const REQUEST_TIMEOUT_MS = 8000;
 
+const gitIssueDefinitions = [
+  {
+    code: "merge_conflict",
+    title: "Merge conflict",
+    category: "conflict",
+    summary: "Resolve conflicted files, stage them, then continue merge or rebase.",
+    options: [
+      ["Inspect conflicts", ["git", "status"], "low"],
+      ["Stage resolved files", ["git", "add", "--", "<resolved-files>"], "medium", true],
+      ["Continue rebase", ["git", "rebase", "--continue"], "high", true]
+    ]
+  },
+  {
+    code: "wrong_branch",
+    title: "Wrong branch risk",
+    category: "branch",
+    summary: "Confirm the target branch before committing, pushing, or deploying.",
+    options: [
+      ["Check branch", ["git", "branch", "--show-current"], "low"],
+      ["Protect work", ["git", "stash", "push", "--include-untracked", "-m", "ProjectPilot branch switch"], "medium", true],
+      ["Switch branch", ["git", "switch", "<correct-branch>"], "medium", true]
+    ]
+  },
+  {
+    code: "local_changes_block",
+    title: "Local changes block pull or switch",
+    category: "working_tree",
+    summary: "Commit or stash local work before pull, rebase, merge, or branch switch.",
+    options: [
+      ["Review diff", ["git", "diff"], "low"],
+      ["Create commit plan", ["projectpilot", "git", "commit-plan", "<repo>"], "low"],
+      ["Stash safely", ["git", "stash", "push", "--include-untracked", "-m", "ProjectPilot safe stash"], "medium", true]
+    ]
+  },
+  {
+    code: "push_rejected",
+    title: "Push rejected risk",
+    category: "sync",
+    summary: "Remote contains commits missing locally; fetch and choose a safe sync strategy before pushing.",
+    options: [
+      ["Fetch remote", ["git", "fetch", "--prune"], "low"],
+      ["Fast-forward pull", ["git", "pull", "--ff-only"], "medium", true],
+      ["Rebase after review", ["git", "pull", "--rebase"], "high", true]
+    ]
+  },
+  {
+    code: "complex_history",
+    title: "History has diverged",
+    category: "history",
+    summary: "Local and remote both have unique commits; choose merge or rebase intentionally.",
+    options: [
+      ["Show graph", ["git", "log", "--oneline", "--graph", "--decorate", "--all"], "low"],
+      ["Merge strategy", ["git", "merge", "<upstream>"], "high", true],
+      ["Rebase strategy", ["git", "rebase", "<upstream>"], "high", true]
+    ]
+  },
+  {
+    code: "accidental_files",
+    title: "Accidental file in commit",
+    category: "commit_hygiene",
+    summary: "Remove secrets, caches, generated outputs, or large artifacts from the commit plan.",
+    options: [
+      ["Unstage file", ["git", "restore", "--staged", "--", "<file>"], "medium", true],
+      ["Stop tracking file", ["git", "rm", "--cached", "<file>"], "medium", true],
+      ["Amend recent commit", ["git", "commit", "--amend"], "high", true]
+    ]
+  },
+  {
+    code: "gitignore_not_effective",
+    title: ".gitignore not effective",
+    category: "ignore_rules",
+    summary: "The file looks generated or local-only but is already tracked by Git.",
+    options: [
+      ["Check ignore rule", ["git", "check-ignore", "-v", "<file>"], "low"],
+      ["Stop tracking file", ["git", "rm", "--cached", "<file>"], "medium", true],
+      ["Commit ignore update", ["git", "add", ".gitignore"], "medium", true]
+    ]
+  },
+  {
+    code: "detached_head",
+    title: "Detached HEAD",
+    category: "branch",
+    summary: "Create a branch before committing if you want to keep this work.",
+    options: [
+      ["Create branch here", ["git", "switch", "-c", "<new-branch>"], "medium", true],
+      ["Return to branch", ["git", "switch", "<branch>"], "medium", true]
+    ]
+  },
+  {
+    code: "force_push_risk",
+    title: "Force push risk",
+    category: "remote_safety",
+    summary: "Force push can overwrite remote work; use force-with-lease only after reviewing remote commits.",
+    options: [
+      ["Inspect remote work", ["git", "log", "--oneline", "--graph", "--decorate", "--all"], "low"],
+      ["Safer force push", ["git", "push", "--force-with-lease"], "high", true]
+    ]
+  },
+  {
+    code: "unknown_state",
+    title: "Unknown current state",
+    category: "diagnostics",
+    summary: "Run the status, graph, and diff triage set before deciding on a write operation.",
+    options: [
+      ["Status", ["git", "status"], "low"],
+      ["Graph", ["git", "log", "--oneline", "--graph", "--decorate", "--all"], "low"],
+      ["Diff", ["git", "diff"], "low"]
+    ]
+  }
+];
+
 const apiContract = [
   ["GET", "/projects", "已接入", "项目列表"],
   ["POST", "/projects", "已接入", "创建项目"],
@@ -649,6 +760,186 @@ function localAnalysis(data, projectId) {
   };
 }
 
+function gitIssueOption([label, command, risk = "low", requiresApproval = false]) {
+  return {
+    label,
+    command,
+    risk,
+    requires_approval: requiresApproval,
+    destructive: risk === "high" && requiresApproval,
+    notes: requiresApproval ? ["Requires explicit executor approval before apply."] : []
+  };
+}
+
+function gitIssueSeverity(active, code, repositories) {
+  if (!active) return "low";
+  if (["merge_conflict", "complex_history", "detached_head", "force_push_risk"].includes(code)) return "high";
+  if (code === "accidental_files" && repositories.some((repo) => gitEvidencePaths(repo).some(isSensitiveGitPath))) {
+    return "high";
+  }
+  return "medium";
+}
+
+function buildGitIssue(code, repositories, active, evidence = []) {
+  const definition = gitIssueDefinitions.find((item) => item.code === code);
+  const safeEvidence = evidence.length ? evidence : active ? ["Active signal detected"] : ["No active signal"];
+  return {
+    code,
+    title: definition.title,
+    category: definition.category,
+    severity: gitIssueSeverity(active, code, repositories),
+    active,
+    summary: definition.summary,
+    evidence: safeEvidence.slice(0, 8),
+    repair_options: definition.options.map(gitIssueOption),
+    guardrails: gitIssueGuardrails(code)
+  };
+}
+
+function buildGitIssueReport(repositories) {
+  const repos = repositories || [];
+  const issueByCode = new Map();
+
+  gitIssueDefinitions.forEach((definition) => {
+    const evidence = gitIssueEvidence(definition.code, repos);
+    issueByCode.set(definition.code, buildGitIssue(definition.code, repos, evidence.length > 0, evidence));
+  });
+
+  const playbook = gitIssueDefinitions.map((definition) => issueByCode.get(definition.code));
+  const issues = playbook.filter((issue) => issue.active);
+  return {
+    schema_version: "git-issues.v1",
+    summary: gitIssueSummary(issues),
+    issues,
+    playbook
+  };
+}
+
+function gitIssueSummary(issues) {
+  if (!issues.length) {
+    return "No active common Git issue detected.";
+  }
+  const high = issues.filter((issue) => issue.severity === "high").length;
+  const medium = issues.filter((issue) => issue.severity === "medium").length;
+  return `${issues.length} active Git issue(s): ${high} high, ${medium} medium.`;
+}
+
+function gitIssueEvidence(code, repositories) {
+  const evidence = [];
+  repositories.forEach((repo) => {
+    const name = displayValue(repo.server_name || repo.repo_path || repo.project_path);
+    const state = repo.state || repo.task_status || "normal";
+    const branch = repo.branch;
+    const ahead = Number(repo.ahead || 0);
+    const behind = Number(repo.behind || 0);
+    const dirty = Boolean(repo.has_uncommitted_changes || repo.is_dirty);
+    const conflicted = Number(repo.conflicted_count || 0) > 0 || (repo.conflicted_files || []).length > 0;
+    const paths = gitEvidencePaths(repo);
+
+    if (code === "merge_conflict" && (conflicted || ["conflict", "merge", "rebase"].includes(state))) {
+      evidence.push(`${name}: ${state}${conflicted ? " with conflicted files" : ""}`);
+    }
+    if (code === "wrong_branch" && branch && !["main", "master"].includes(branch)) {
+      evidence.push(`${name}: current branch ${branch}`);
+    }
+    if (code === "local_changes_block" && dirty && !conflicted) {
+      evidence.push(`${name}: local changes present`);
+    }
+    if (code === "push_rejected" && behind > 0) {
+      evidence.push(`${name}: behind upstream by ${behind}`);
+    }
+    if (code === "complex_history" && ahead > 0 && behind > 0) {
+      evidence.push(`${name}: ahead ${ahead}, behind ${behind}`);
+    }
+    if (code === "accidental_files") {
+      paths.filter((path) => isSensitiveGitPath(path) || isGeneratedGitPath(path)).forEach((path) => evidence.push(`${name}: ${path}`));
+    }
+    if (code === "gitignore_not_effective") {
+      trackedGeneratedPaths(repo).forEach((path) => evidence.push(`${name}: ${path}`));
+    }
+    if (code === "detached_head" && (branch === null || branch === "" || state === "detached")) {
+      evidence.push(`${name}: detached HEAD`);
+    }
+    if (code === "force_push_risk" && ahead > 0 && behind > 0) {
+      evidence.push(`${name}: force push would risk remote work`);
+    }
+    if (code === "unknown_state" && ((!repo.raw && !repo.branch) || (!repo.remote_url && !repo.upstream))) {
+      evidence.push(`${name}: missing branch or upstream signal`);
+    }
+  });
+  return [...new Set(evidence)];
+}
+
+function gitEvidencePaths(repo) {
+  const paths = [
+    ...(repo.staged_files || []),
+    ...(repo.unstaged_files || []),
+    ...(repo.untracked_files || []),
+    ...(repo.excluded_paths || []),
+    ...(repo.review_paths || [])
+  ];
+  (repo.changed_files || []).forEach((item) => {
+    if (typeof item === "string") {
+      paths.push(item);
+    } else if (item?.path) {
+      paths.push(item.path);
+    }
+  });
+  return [...new Set(paths.filter(Boolean))];
+}
+
+function trackedGeneratedPaths(repo) {
+  const tracked = [
+    ...(repo.staged_files || []),
+    ...(repo.unstaged_files || []),
+    ...(repo.excluded_paths || [])
+  ];
+  (repo.changed_files || []).forEach((item) => {
+    if (typeof item === "string") {
+      tracked.push(item);
+    } else if (item?.path && item.index_status !== "?" && item.worktree_status !== "?") {
+      tracked.push(item.path);
+    }
+  });
+  return [...new Set(tracked.filter(isGeneratedGitPath))];
+}
+
+function isSensitiveGitPath(path) {
+  const lowered = String(path || "").toLowerCase();
+  const name = lowered.split("/").pop() || "";
+  return (
+    name.startsWith(".env") ||
+    lowered.includes("secret") ||
+    lowered.includes("password") ||
+    lowered.includes("token") ||
+    [".pem", ".key", ".p12", ".pfx"].some((suffix) => lowered.endsWith(suffix))
+  );
+}
+
+function isGeneratedGitPath(path) {
+  const lowered = String(path || "").toLowerCase();
+  const parts = new Set(lowered.split("/"));
+  return (
+    ["node_modules", "dist", "build", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"].some((part) => parts.has(part)) ||
+    [".pyc", ".pyo", ".log", ".tmp", ".swp", ".ds_store"].some((suffix) => lowered.endsWith(suffix))
+  );
+}
+
+function gitIssueGuardrails(code) {
+  return {
+    merge_conflict: ["Block pull, push, switch, and apply operations until conflicts are resolved."],
+    wrong_branch: ["Protect work with stash or cherry-pick plan before moving it to another branch."],
+    local_changes_block: ["Discard operations such as reset --hard or clean -fd require explicit approval."],
+    push_rejected: ["Fetch first; do not force push to solve rejection."],
+    complex_history: ["Team policy should decide merge vs rebase before applying either plan."],
+    accidental_files: ["Never commit .env, private keys, tokens, build output, caches, or local database files."],
+    gitignore_not_effective: ["Removing from the index must not delete the local file unless explicitly approved."],
+    detached_head: ["Create a branch before committing if this work should be kept."],
+    force_push_risk: ["Plain git push --force is blocked; prefer force-with-lease after review."],
+    unknown_state: ["No write operation should be applied until branch, upstream, and diff are known."]
+  }[code] || [];
+}
+
 function localGitAnalysis(data, projectId) {
   const project = data.projects.find((item) => Number(item.id) === Number(projectId));
   const status = localProjectStatus(data, projectId);
@@ -678,6 +969,12 @@ function localGitAnalysis(data, projectId) {
   const blockedOperations = [];
   const nextSteps = [];
   const warnings = [];
+  const issueReport = buildGitIssueReport(repositories);
+  const issueRisk = issueReport.issues.some((issue) => issue.severity === "high")
+    ? "high"
+    : issueReport.issues.some((issue) => issue.severity === "medium")
+      ? "medium"
+      : risk;
 
   if (!repositories.length) {
     warnings.push("No bound repositories were found for this project.");
@@ -729,7 +1026,7 @@ function localGitAnalysis(data, projectId) {
     branch: firstRepo.branch || null,
     upstream: firstRepo.remote_url || null,
     commit: firstRepo.last_commit || null,
-    risk,
+    risk: issueRisk,
     state: dirty ? "dirty" : behind && ahead ? "diverged" : behind ? "behind" : ahead ? "ahead" : missing ? "unknown" : "ready",
     summary: `${repositories.length} bound repositories, ${dirty} dirty, ${ahead} ahead, ${behind} behind`,
     findings: [
@@ -764,7 +1061,10 @@ function localGitAnalysis(data, projectId) {
     operation_plans: operationPlans,
     blocked_operations: blockedOperations,
     next_steps: nextSteps,
-    warnings
+    warnings,
+    issue_report: issueReport,
+    issues: issueReport.issues,
+    playbook: issueReport.playbook
   };
 }
 
@@ -2760,6 +3060,31 @@ function gitWorkspaceRows() {
   });
 }
 
+function gitRepositoriesFromRows(rows) {
+  return rows.map((row) => ({
+    raw: row.raw,
+    server_id: row.server.server_id,
+    server_name: row.server.server_name,
+    project_path: row.server.project_path,
+    repo_path: row.server.project_path,
+    branch: row.raw?.branch ?? (row.branch === MISSING_VALUE ? null : row.branch),
+    upstream: row.raw?.upstream || row.raw?.remote_url || null,
+    remote_url: row.raw?.remote_url || null,
+    ahead: row.ahead,
+    behind: row.behind,
+    has_uncommitted_changes: row.dirty,
+    state: row.raw?.state || row.raw?.task_status || "normal",
+    conflicted_count: row.raw?.conflicted_count || 0,
+    conflicted_files: row.raw?.conflicted_files || [],
+    staged_files: row.raw?.staged_files || [],
+    unstaged_files: row.raw?.unstaged_files || [],
+    untracked_files: row.raw?.untracked_files || [],
+    changed_files: row.raw?.changed_files || [],
+    excluded_paths: row.raw?.excluded_paths || [],
+    review_paths: row.raw?.review_paths || []
+  }));
+}
+
 function gitNextActions(row) {
   if (!row.raw) {
     return [
@@ -2895,6 +3220,91 @@ function renderGitBlockedOperation(item) {
   `;
 }
 
+function gitIssueReportForWorkspace(rows) {
+  return state.gitAnalysis?.issue_report || {
+    ...buildGitIssueReport(gitRepositoriesFromRows(rows)),
+    source: "workspace_status"
+  };
+}
+
+function issueTone(severity, active) {
+  if (!active) return "muted";
+  if (severity === "high") return "danger";
+  if (severity === "medium") return "warning";
+  return "healthy";
+}
+
+function renderGitRepairOption(option) {
+  const command = Array.isArray(option.command) ? option.command.join(" ") : displayValue(option.command);
+  const risk = option.risk || "low";
+  return `
+    <article class="git-repair-option">
+      <div>
+        <strong>${escapeHtml(displayValue(option.label || option.title || option.operation))}</strong>
+        <code>${escapeHtml(command)}</code>
+      </div>
+      <span class="badge ${riskTone(risk)}">${escapeHtml(option.requires_approval ? `${risk} · approval` : risk)}</span>
+    </article>
+  `;
+}
+
+function renderGitIssueCard(issue, { compact = false } = {}) {
+  const tone = issueTone(issue.severity, issue.active);
+  const evidence = Array.isArray(issue.evidence) ? issue.evidence : [];
+  const options = Array.isArray(issue.repair_options) ? issue.repair_options : [];
+  return `
+    <article class="git-issue-card ${issue.active ? "active" : ""}">
+      <div class="git-issue-title">
+        <div>
+          <strong>${escapeHtml(displayValue(issue.title))}</strong>
+          <small>${escapeHtml(displayValue(issue.category))}</small>
+        </div>
+        <span class="badge ${tone}">${escapeHtml(issue.active ? issue.severity : "clear")}</span>
+      </div>
+      <p>${escapeHtml(displayValue(issue.summary))}</p>
+      ${evidence.length ? `
+        <ul class="git-evidence-list">
+          ${evidence.slice(0, compact ? 3 : 6).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      ` : ""}
+      ${compact ? "" : `
+        <div class="git-repair-list">
+          ${options.slice(0, 3).map(renderGitRepairOption).join("")}
+        </div>
+        ${(issue.guardrails || []).length ? `<p class="git-guardrail">${escapeHtml(issue.guardrails[0])}</p>` : ""}
+      `}
+    </article>
+  `;
+}
+
+function renderGitIssueBoard(issueReport) {
+  const issues = Array.isArray(issueReport?.issues) ? issueReport.issues : [];
+  const playbook = Array.isArray(issueReport?.playbook) ? issueReport.playbook : [];
+  const activeCards = issues.length
+    ? issues.map((issue) => renderGitIssueCard(issue)).join("")
+    : `<article class="git-issue-card"><strong>No active issue</strong><p>${escapeHtml(displayValue(issueReport?.summary || "No active common Git issue detected."))}</p></article>`;
+
+  return `
+    <section class="panel git-issue-board">
+      <div class="panel-header">
+        <h3>Git Problem Solver</h3>
+        <span>${escapeHtml(displayValue(issueReport?.schema_version || "git-issues.v1"))}</span>
+      </div>
+      <p class="muted-copy">${escapeHtml(displayValue(issueReport?.summary))}</p>
+      <div class="git-active-issues">
+        ${activeCards}
+      </div>
+      <div class="panel-header compact-header">
+        <h3>10 Common Git Issues</h3>
+        <span>${playbook.filter((issue) => issue.active).length} active</span>
+      </div>
+      <div class="git-playbook-grid">
+        ${playbook.map((issue) => renderGitIssueCard(issue, { compact: true })).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderGitAnalysisSummary(analysis) {
   if (!analysis) {
     return `<p class="muted-copy">尚未返回 Git AI 分析</p>`;
@@ -2911,6 +3321,7 @@ function renderGitAnalysisSummary(analysis) {
     ? analysis.next_steps
     : analysis.reports?.sync_plan?.next_steps || [];
   const findings = Array.isArray(analysis.findings) ? analysis.findings : [];
+  const issues = Array.isArray(analysis.issues) ? analysis.issues : analysis.issue_report?.issues || [];
 
   return `
     <div class="git-analysis-summary">
@@ -2920,6 +3331,7 @@ function renderGitAnalysisSummary(analysis) {
         <span>Branch</span><strong>${escapeHtml(displayValue(analysis.branch))}</strong>
         <span>State</span><strong>${escapeHtml(displayValue(analysis.state || analysis.status))}</strong>
         <span>Risk</span><strong><span class="badge ${riskTone(risk)}">${escapeHtml(risk)}</span></strong>
+        <span>Issues</span><strong>${escapeHtml(displayValue(issues.length))}</strong>
       </div>
       ${analysis.summary ? `<p class="muted-copy">${escapeHtml(analysis.summary)}</p>` : ""}
       <div class="git-analysis-columns">
@@ -2961,6 +3373,7 @@ function renderGitTaskItem(task) {
 
 function renderGitWorkspace() {
   const rows = gitWorkspaceRows();
+  const issueReport = gitIssueReportForWorkspace(rows);
   const clean = rows.filter((row) => row.sync.tone === "healthy").length;
   const attention = rows.filter((row) => row.sync.tone === "warning" || row.sync.tone === "danger").length;
   const dirty = rows.filter((row) => row.dirty).length;
@@ -2988,6 +3401,8 @@ function renderGitWorkspace() {
           <button type="button" data-route="tasks">Task Stream</button>
         </div>
       </section>
+
+      ${renderGitIssueBoard(issueReport)}
 
       <div class="git-layout">
         <section class="panel wide-list">
