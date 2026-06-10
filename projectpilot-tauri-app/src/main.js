@@ -1,3 +1,20 @@
+import React from "react";
+import { createRoot } from "react-dom/client";
+import GraphContainer, {
+  changesZone,
+  commitAuthorZone,
+  commitDateTimeZone,
+  commitMessageZone,
+  commitNodeType,
+  commitShaZone,
+  commitZone,
+  mergeNodeType,
+  refZone
+} from "@gitkraken/gitkraken-components";
+import "@gitkraken/gitkraken-components/dist/styles.css";
+import "./styles.css";
+import projectPilotIconUrl from "./assets/projectpilot-icon.png";
+
 const API_BASE_KEY = "projectpilot.apiBase";
 const API_BASE_VERSION_KEY = "projectpilot.apiBaseVersion";
 const API_BASE_VERSION = "20260610-local-test-workspace";
@@ -7,6 +24,9 @@ const SESSION_KEY = "projectpilot.session";
 const LOCAL_DEMO_KEY = "projectpilot.localDemo.v2";
 const MISSING_VALUE = "未返回";
 const REQUEST_TIMEOUT_MS = 8000;
+const gitGraphPayloads = new Map();
+const gitGraphRoots = new Map();
+let gitGraphRenderSerial = 0;
 
 const gitIssueDefinitions = [
   {
@@ -2490,10 +2510,12 @@ function updateToast() {
 function render() {
   const editingState = captureEditingState();
   const app = document.querySelector("#app");
+  resetGitGraphRenderState();
   if (!state.user) {
     app.innerHTML = renderLogin();
     bindLogin();
     restoreEditingState(editingState);
+    mountGitKrakenGraphs();
     return;
   }
 
@@ -2513,13 +2535,14 @@ function render() {
 
   bindShell();
   restoreEditingState(editingState);
+  mountGitKrakenGraphs();
 }
 
 function renderLogin() {
   return `
     <main class="login-screen">
       <section class="login-brand">
-        <img class="brand-mark" src="./src/assets/projectpilot-icon.png" alt="ProjectPilot" />
+        <img class="brand-mark" src="${projectPilotIconUrl}" alt="ProjectPilot" />
         <h1>ProjectPilot</h1>
         <p>AI 项目环境健康监控桌面端</p>
         <div class="login-preview">
@@ -2561,7 +2584,7 @@ function renderSidebar() {
   return `
     <aside class="sidebar">
       <div class="brand">
-        <img class="brand-mark small" src="./src/assets/projectpilot-icon.png" alt="" aria-hidden="true" />
+        <img class="brand-mark small" src="${projectPilotIconUrl}" alt="" aria-hidden="true" />
         <div>
           <strong>ProjectPilot</strong>
           <span>AI Project Health Monitor</span>
@@ -3676,6 +3699,24 @@ function renderCommitGraph(repo) {
   if (!commits.length) {
     return `<p class="muted-copy">No commits returned for this repository.</p>`;
   }
+  const mountId = `gitkraken-graph-${++gitGraphRenderSerial}`;
+  gitGraphPayloads.set(mountId, {
+    ...repo,
+    commits
+  });
+  const height = Math.max(360, Math.min(720, 78 + commits.length * 30));
+  return `
+    <div class="gitkraken-graph-shell" data-gitkraken-graph-shell="${mountId}" style="--gitkraken-graph-height: ${height}px">
+      <div class="gitkraken-graph-mount" data-gitkraken-graph="${mountId}"></div>
+      <div class="gitkraken-graph-static-fallback" data-gitkraken-graph-fallback="${mountId}">
+        ${renderFallbackCommitGraph({ ...repo, commits })}
+      </div>
+    </div>
+  `;
+}
+
+function renderFallbackCommitGraph(repo) {
+  const commits = (repo.commits || []).slice(0, 14);
   const rows = commitGraphRows(repo, commits);
   const layout = buildGraphSvgLayout(rows);
   return `
@@ -3696,6 +3737,191 @@ function renderCommitGraph(repo) {
       </div>
     </div>
   `;
+}
+
+function mountGitKrakenGraphs() {
+  const activeMounts = new Set();
+  document.querySelectorAll("[data-gitkraken-graph]").forEach((mount) => {
+    const mountId = mount.dataset.gitkrakenGraph;
+    const repo = gitGraphPayloads.get(mountId);
+    if (!mountId || !repo) return;
+
+    activeMounts.add(mount);
+    let root = gitGraphRoots.get(mount);
+    if (!root) {
+      root = createRoot(mount);
+      gitGraphRoots.set(mount, root);
+    }
+
+    const shell = document.querySelector(`[data-gitkraken-graph-shell="${CSS.escape(mountId)}"]`);
+    try {
+      root.render(React.createElement(GitKrakenCommitGraph, { repo }));
+      shell?.classList.add("gitkraken-graph-mounted");
+      shell?.classList.remove("gitkraken-graph-error");
+    } catch (error) {
+      console.error("GitKraken graph render failed", error);
+      shell?.classList.remove("gitkraken-graph-mounted");
+      shell?.classList.add("gitkraken-graph-error");
+    }
+  });
+
+  for (const [mount, root] of gitGraphRoots.entries()) {
+    if (activeMounts.has(mount) && document.body.contains(mount)) continue;
+    root.unmount();
+    gitGraphRoots.delete(mount);
+  }
+}
+
+function resetGitGraphRenderState() {
+  gitGraphRenderSerial = 0;
+  gitGraphPayloads.clear();
+}
+
+function GitKrakenCommitGraph({ repo }) {
+  const rows = toGitKrakenGraphRows(repo);
+  const rowsStats = rows.reduce((acc, row) => {
+    const stats = row.stats;
+    if (stats) {
+      acc[row.sha] = stats;
+    }
+    return acc;
+  }, {});
+
+  return React.createElement(GraphContainer, {
+    graphRows: rows,
+    columnsSettings: gitKrakenGraphColumns(),
+    repoPath: repo.repo_path || repo.project_path || "",
+    rowsStats,
+    shaLength: 7,
+    platform: "darwin",
+    graphCommitDescDisplayMode: "compact",
+    highlightRowsOnRefHover: true,
+    showRemoteNamesOnRefs: true,
+    suppressNonRefRowTooltips: true,
+    useAuthorInitialsForAvatars: true,
+    getExternalIcon: gitKrakenExternalIcon,
+    formatCommitDateTime: formatGitKrakenDateTime,
+    formatCommitMessage: formatGitKrakenCommitMessage,
+    onDoubleClickGraphRow: (_event, row) => {
+      setToast(`Commit ${displayValue(row?.sha || "").slice(0, 7)}`);
+    }
+  });
+}
+
+function gitKrakenGraphColumns() {
+  return {
+    [commitZone]: { width: 70, isHidden: false, mode: "compact", order: 0 },
+    [commitMessageZone]: { width: 320, isHidden: false, order: 1 },
+    [refZone]: { width: 220, isHidden: false, order: 2 },
+    [commitAuthorZone]: { width: 92, isHidden: false, order: 3 },
+    [commitDateTimeZone]: { width: 76, isHidden: false, order: 4 },
+    [commitShaZone]: { width: 66, isHidden: false, order: 5 },
+    [changesZone]: { width: 72, isHidden: true, order: 6 }
+  };
+}
+
+function gitKrakenExternalIcon(iconKey) {
+  const safeIconKey = String(iconKey || "unknown").replace(/[^a-z0-9_-]/gi, "-");
+  return React.createElement("span", {
+    key: safeIconKey,
+    className: `gitkraken-icon gitkraken-icon-${safeIconKey}`,
+    "aria-hidden": "true"
+  });
+}
+
+function formatGitKrakenCommitMessage(commitMessage) {
+  return {
+    summary: displayValue(commitMessage || "")
+  };
+}
+
+function formatGitKrakenDateTime(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  return relativeTimeFromTimestamp(seconds * 1000);
+}
+
+function toGitKrakenGraphRows(repo) {
+  return (repo.commits || []).map((commit, index) => {
+    const refs = Array.isArray(commit.refs) ? commit.refs : [];
+    const heads = refs
+      .filter((ref) => ref.type === "branch")
+      .map((ref) => ({
+        id: ref.full_name || `refs/heads/${ref.name}`,
+        name: ref.name,
+        isCurrentHead: Boolean(ref.is_head || commit.is_head),
+        upstream: ref.upstream ? { name: ref.upstream, id: `refs/remotes/${ref.upstream}` } : undefined
+      }));
+    const remotes = refs
+      .filter((ref) => ref.type === "remote")
+      .map((ref) => {
+        const name = String(ref.name || "");
+        const [owner, ...rest] = name.split("/");
+        return {
+          id: ref.full_name || `refs/remotes/${name}`,
+          name: rest.join("/") || name,
+          owner: rest.length ? owner : "origin",
+          current: Boolean(ref.is_head)
+        };
+      });
+    const tags = refs
+      .filter((ref) => ref.type === "tag")
+      .map((ref) => ({
+        id: ref.full_name || `refs/tags/${ref.name}`,
+        name: ref.name,
+        annotated: false
+      }));
+
+    return {
+      sha: String(commit.hash || commit.sha || commit.short_hash || `commit-${index}`),
+      parents: (commit.parents || []).map(String),
+      author: displayValue(commit.author || "ProjectPilot"),
+      email: displayValue(commit.email || "projectpilot@example.local"),
+      date: commitTimestampSeconds(commit, index),
+      message: displayValue(commit.subject || commit.message || commit.summary || "Commit"),
+      type: commit.is_merge || (commit.parents || []).length > 1 ? mergeNodeType : commitNodeType,
+      heads,
+      remotes,
+      tags,
+      stats: commit.stats || undefined
+    };
+  });
+}
+
+function commitTimestampSeconds(commit, index) {
+  const rawDate = commit.date || commit.commit_date || commit.timestamp || commit.created_at;
+  const parsed = parseTimestamp(rawDate);
+  if (parsed) {
+    return Math.floor(parsed / 1000);
+  }
+  const relative = String(commit.relative_time || "");
+  const now = Date.now();
+  const match = relative.match(/(\d+)\s*(minute|minutes|min|hour|hours|day|days|week|weeks|month|months|year|years)/i);
+  if (!match) {
+    return Math.floor((now - index * 3600000) / 1000);
+  }
+  const value = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  const multiplier =
+    unit.startsWith("min") ? 60000 :
+    unit.startsWith("hour") ? 3600000 :
+    unit.startsWith("day") ? 86400000 :
+    unit.startsWith("week") ? 604800000 :
+    unit.startsWith("month") ? 2592000000 :
+    unit.startsWith("year") ? 31536000000 :
+    3600000;
+  return Math.floor((now - value * multiplier) / 1000);
+}
+
+function relativeTimeFromTimestamp(timestamp) {
+  const diff = Math.max(0, Date.now() - Number(timestamp));
+  const minute = 60000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) return "now";
+  if (diff < hour) return `${Math.round(diff / minute)}m ago`;
+  if (diff < day) return `${Math.round(diff / hour)}h ago`;
+  return `${Math.round(diff / day)}d ago`;
 }
 
 function commitGraphRows(repo, commits) {

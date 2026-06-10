@@ -24,7 +24,7 @@ let chromeProcess = null;
 let client = null;
 
 try {
-  serverProcess = spawn(process.execPath, ["scripts/dev-server.mjs"], {
+  serverProcess = spawn(process.execPath, ["scripts/dev-server.mjs", "dist"], {
     cwd: root,
     shell: false,
     stdio: ["ignore", "pipe", "pipe"],
