@@ -3676,7 +3676,7 @@ function renderCommitGraph(repo) {
   const rows = commitGraphRows(repo, commits);
   return `
     <div class="commit-graph topology">
-      ${rows.map(renderCommitGraphRow).join("")}
+      ${rows.map((row, index) => renderCommitGraphRow(row, index, rows.length)).join("")}
     </div>
   `;
 }
@@ -3722,12 +3722,18 @@ function commitGraphRows(repo, commits) {
   return rows;
 }
 
-function renderCommitGraphRow(row) {
+function renderCommitGraphRow(row, index, totalRows) {
   const commit = row.commit;
+  const rowClasses = [
+    "commit-graph-row",
+    commit ? "has-commit" : "connector",
+    index === 0 ? "is-first" : "",
+    index === totalRows - 1 ? "is-last" : ""
+  ].filter(Boolean).join(" ");
   if (!commit) {
     return `
-      <div class="commit-graph-row connector">
-        <div class="graph-ascii" aria-hidden="true">${renderGraphGlyphs(row.graph)}</div>
+      <div class="${rowClasses}">
+        ${renderGraphLanes(row.graph)}
         <div></div>
       </div>
     `;
@@ -3737,8 +3743,8 @@ function renderCommitGraphRow(row) {
     .filter(Boolean)
     .join(" ");
   return `
-    <article class="commit-graph-row has-commit">
-      <div class="graph-ascii" aria-hidden="true">${renderGraphGlyphs(row.graph || "* ")}</div>
+    <article class="${rowClasses}">
+      ${renderGraphLanes(row.graph || "* ")}
       <div class="${cardClasses}">
         <div class="commit-title">
           <strong>${escapeHtml(displayValue(commit.subject))}</strong>
@@ -3755,30 +3761,68 @@ function renderCommitGraphRow(row) {
   `;
 }
 
-function renderGraphGlyphs(value) {
-  const graph = String(value || "* ").padEnd(4, " ");
-  return [...graph].slice(0, 22).map((char, index) => {
-    const lane = Math.max(0, Math.min(Math.floor(index / 2), 5));
-    const glyph = {
-      " ": "&nbsp;",
-      "*": "●",
-      "|": "│",
-      "/": "╱",
-      "\\": "╲",
-      "_": "─",
-      "-": "─"
-    }[char] || escapeHtml(char);
-    const type = {
-      " ": "space",
-      "*": "dot",
-      "|": "pipe edge",
-      "/": "slash edge",
-      "\\": "backslash edge",
-      "_": "dash edge",
-      "-": "dash edge"
-    }[char] || "label";
-    return `<span class="graph-glyph lane-${lane} ${type}">${glyph}</span>`;
-  }).join("");
+function renderGraphLanes(value) {
+  const laneCount = 6;
+  const lanes = Array.from({ length: laneCount }, () => ({
+    active: false,
+    node: false,
+    down: false,
+    up: false,
+    horizontal: false
+  }));
+
+  [...String(value || "* ").slice(0, laneCount * 2 + 2)].forEach((char, charIndex) => {
+    const laneIndex = Math.max(0, Math.min(Math.floor(charIndex / 2), laneCount - 1));
+    const lane = lanes[laneIndex];
+    if (char === "|" || char === "*") {
+      lane.active = true;
+    }
+    if (char === "*") {
+      lane.node = true;
+    }
+    if (char === "\\") {
+      lane.active = true;
+      lane.down = true;
+      if (lanes[laneIndex + 1]) lanes[laneIndex + 1].active = true;
+    }
+    if (char === "/") {
+      lane.active = true;
+      lane.up = true;
+      if (lanes[laneIndex + 1]) lanes[laneIndex + 1].active = true;
+    }
+    if (char === "_" || char === "-") {
+      lane.active = true;
+      lane.horizontal = true;
+    }
+  });
+
+  if (!lanes.some((lane) => lane.active || lane.node || lane.down || lane.up || lane.horizontal)) {
+    lanes[0].active = true;
+    lanes[0].node = true;
+  }
+
+  return `
+    <div class="graph-lanes" aria-hidden="true">
+      ${lanes.map((lane, laneIndex) => {
+        const classes = [
+          "graph-lane",
+          `lane-${laneIndex}`,
+          lane.active ? "active" : "",
+          lane.node ? "node" : "",
+          lane.down ? "diag-down" : "",
+          lane.up ? "diag-up" : "",
+          lane.horizontal ? "horizontal" : ""
+        ].filter(Boolean).join(" ");
+        return `
+          <span class="${classes}">
+            ${lane.down ? `<span class="graph-diagonal down"></span>` : ""}
+            ${lane.up ? `<span class="graph-diagonal up"></span>` : ""}
+            ${lane.horizontal ? `<span class="graph-horizontal"></span>` : ""}
+          </span>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function uniquePaths(paths = []) {

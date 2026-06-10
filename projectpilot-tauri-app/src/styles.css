@@ -844,7 +844,7 @@ td span,
 
 .commit-graph {
   display: grid;
-  gap: 6px;
+  gap: 0;
 }
 
 .commit-graph.topology {
@@ -859,154 +859,140 @@ td span,
 
 .commit-graph-row {
   display: grid;
-  grid-template-columns: minmax(92px, max-content) minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
   min-width: 0;
 }
 
 .commit-graph-row.connector {
-  min-height: 18px;
+  min-height: 28px;
 }
 
 .commit-graph-row.has-commit {
   min-height: 66px;
+  padding-bottom: 10px;
 }
 
-.graph-ascii {
-  display: flex;
-  align-items: flex-start;
-  min-height: 26px;
-  padding: 5px 2px 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1;
-  white-space: pre;
-  user-select: none;
+.commit-graph-row.is-last {
+  padding-bottom: 0;
 }
 
-.commit-graph-row.connector .graph-ascii {
-  min-height: 18px;
-  padding-top: 0;
+.graph-lanes {
+  display: grid;
+  grid-template-columns: repeat(6, 18px);
+  width: 108px;
+  min-height: 100%;
+  padding-left: 8px;
+  align-self: stretch;
+  justify-self: start;
 }
 
-.graph-glyph {
+.graph-lane {
   --graph-color: #8fe7ff;
-  --graph-glow: rgba(143, 231, 255, 0.18);
+  --graph-glow: rgba(143, 231, 255, 0.2);
   position: relative;
-  display: inline-flex;
-  width: 13px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  color: var(--graph-color);
-  text-shadow: 0 0 12px var(--graph-glow);
-  z-index: 1;
+  min-height: 100%;
 }
 
-.graph-glyph.space {
-  opacity: 0;
-}
-
-.graph-glyph.pipe,
-.graph-glyph.dash {
-  color: transparent;
-  text-shadow: none;
-}
-
-.graph-glyph.pipe::before {
+.graph-lane.active::before {
   content: "";
   position: absolute;
-  top: -8px;
-  bottom: -8px;
+  top: 0;
+  bottom: 0;
   left: 50%;
-  width: 2px;
+  width: 3px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: linear-gradient(180deg, transparent, var(--graph-color) 18%, var(--graph-color) 82%, transparent);
-  box-shadow: 0 0 12px var(--graph-glow);
+  background: var(--graph-color);
+  box-shadow: 0 0 13px var(--graph-glow);
 }
 
-.commit-graph-row.has-commit .graph-glyph.pipe::before {
-  top: -12px;
-  bottom: -52px;
+.commit-graph-row.is-first .graph-lane.active::before {
+  top: 20px;
 }
 
-.graph-glyph.dash::before {
+.commit-graph-row.is-last .graph-lane.active::before {
+  bottom: calc(100% - 22px);
+}
+
+.graph-lane.node::after {
   content: "";
   position: absolute;
-  right: -2px;
-  left: -2px;
-  top: 50%;
-  height: 2px;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: var(--graph-color);
-  box-shadow: 0 0 12px var(--graph-glow);
-}
-
-.graph-glyph.slash,
-.graph-glyph.backslash {
-  font-size: 20px;
-  line-height: 18px;
-}
-
-.graph-glyph.dot {
-  position: relative;
+  top: 18px;
+  left: 50%;
   width: 16px;
   height: 16px;
-  margin-top: -3px;
+  transform: translate(-50%, -50%);
   border-radius: 999px;
-  color: transparent;
   background: var(--graph-color);
-  box-shadow: 0 0 0 4px var(--graph-glow), 0 0 20px var(--graph-glow);
+  box-shadow: 0 0 0 6px rgba(143, 231, 255, 0.12), 0 0 20px var(--graph-glow);
+  z-index: 3;
 }
 
-.commit-graph-row.has-commit .graph-glyph.dot::after {
-  content: "";
+.commit-graph-row.has-commit .graph-lane.node::after {
+  top: 21px;
+}
+
+.graph-diagonal,
+.graph-horizontal {
   position: absolute;
-  top: 15px;
-  left: 50%;
-  width: 2px;
-  height: 54px;
-  transform: translateX(-50%);
+  z-index: 2;
+  display: block;
+  height: 2px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--graph-color), transparent);
-  box-shadow: 0 0 12px var(--graph-glow);
-  z-index: -1;
+  background: var(--graph-color);
+  box-shadow: 0 0 13px var(--graph-glow);
+  pointer-events: none;
 }
 
-.commit-graph-row.has-commit:last-child .graph-glyph.dot::after {
-  display: none;
+.graph-diagonal {
+  left: 50%;
+  width: 27px;
+  top: 50%;
+  transform-origin: left center;
 }
 
-.graph-glyph.lane-0 {
+.graph-diagonal.down {
+  transform: rotate(50deg);
+}
+
+.graph-diagonal.up {
+  transform: rotate(-50deg);
+}
+
+.graph-horizontal {
+  left: 50%;
+  right: -50%;
+  top: 50%;
+}
+
+.graph-lane.lane-0 {
   --graph-color: #8fe7ff;
   --graph-glow: rgba(143, 231, 255, 0.2);
 }
 
-.graph-glyph.lane-1 {
+.graph-lane.lane-1 {
   --graph-color: #76efac;
   --graph-glow: rgba(118, 239, 172, 0.18);
 }
 
-.graph-glyph.lane-2 {
+.graph-lane.lane-2 {
   --graph-color: #f9c75d;
   --graph-glow: rgba(249, 199, 93, 0.18);
 }
 
-.graph-glyph.lane-3 {
+.graph-lane.lane-3 {
   --graph-color: #ff7aa8;
   --graph-glow: rgba(255, 122, 168, 0.16);
 }
 
-.graph-glyph.lane-4 {
+.graph-lane.lane-4 {
   --graph-color: #a88dff;
   --graph-glow: rgba(168, 141, 255, 0.16);
 }
 
-.graph-glyph.lane-5 {
+.graph-lane.lane-5 {
   --graph-color: #ffb86b;
   --graph-glow: rgba(255, 184, 107, 0.16);
 }
