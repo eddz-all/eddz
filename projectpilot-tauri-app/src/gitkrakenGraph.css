@@ -57,30 +57,30 @@
   --text-disabled: rgba(156, 168, 189, 0.5);
   --text-accent: #8fe7ff;
   --link-color: #8fe7ff;
-  --selected-row: rgba(79, 70, 229, 0.22);
-  --hover-row: rgba(145, 158, 187, 0.08);
+  --selected-row: rgba(145, 158, 187, 0.08);
+  --hover-row: rgba(145, 158, 187, 0.055);
   --input__bg: rgba(2, 6, 15, 0.7);
-  --scroll-thumb-bg: rgba(145, 158, 187, 0.32);
-  --graph-color-0: #8fe7ff;
-  --graph-color-1: #76efac;
-  --graph-color-2: #f9c75d;
-  --graph-color-3: #ff7aa8;
-  --graph-color-4: #9f8cff;
-  --graph-color-0-bg25: rgba(143, 231, 255, 0.18);
-  --graph-color-1-bg25: rgba(118, 239, 172, 0.18);
-  --graph-color-2-bg25: rgba(249, 199, 93, 0.18);
-  --graph-color-3-bg25: rgba(255, 122, 168, 0.18);
-  --graph-color-4-bg25: rgba(159, 140, 255, 0.18);
-  --graph-color-0-bg45: rgba(143, 231, 255, 0.28);
-  --graph-color-1-bg45: rgba(118, 239, 172, 0.28);
-  --graph-color-2-bg45: rgba(249, 199, 93, 0.28);
-  --graph-color-3-bg45: rgba(255, 122, 168, 0.28);
-  --graph-color-4-bg45: rgba(159, 140, 255, 0.28);
-  --graph-color-0-bg50: rgba(143, 231, 255, 0.34);
-  --graph-color-1-bg50: rgba(118, 239, 172, 0.34);
-  --graph-color-2-bg50: rgba(249, 199, 93, 0.34);
-  --graph-color-3-bg50: rgba(255, 122, 168, 0.34);
-  --graph-color-4-bg50: rgba(159, 140, 255, 0.34);
+  --scroll-thumb-bg: rgba(145, 158, 187, 0.18);
+  --graph-color-0: #70c7dc;
+  --graph-color-1: #69d39b;
+  --graph-color-2: #d6b65d;
+  --graph-color-3: #d87998;
+  --graph-color-4: #9187db;
+  --graph-color-0-bg25: rgba(112, 199, 220, 0.12);
+  --graph-color-1-bg25: rgba(105, 211, 155, 0.12);
+  --graph-color-2-bg25: rgba(214, 182, 93, 0.12);
+  --graph-color-3-bg25: rgba(216, 121, 152, 0.12);
+  --graph-color-4-bg25: rgba(145, 135, 219, 0.12);
+  --graph-color-0-bg45: rgba(112, 199, 220, 0.2);
+  --graph-color-1-bg45: rgba(105, 211, 155, 0.2);
+  --graph-color-2-bg45: rgba(214, 182, 93, 0.2);
+  --graph-color-3-bg45: rgba(216, 121, 152, 0.2);
+  --graph-color-4-bg45: rgba(145, 135, 219, 0.2);
+  --graph-color-0-bg50: rgba(112, 199, 220, 0.24);
+  --graph-color-1-bg50: rgba(105, 211, 155, 0.24);
+  --graph-color-2-bg50: rgba(214, 182, 93, 0.24);
+  --graph-color-3-bg50: rgba(216, 121, 152, 0.24);
+  --graph-color-4-bg50: rgba(145, 135, 219, 0.24);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 12px;
   line-height: 18px;
@@ -123,9 +123,36 @@
 }
 
 .gitkraken-graph-mount .commit-zone .avatar.node {
+  border: 1px solid rgba(164, 224, 240, 0.56);
+  box-shadow:
+    0 0 0 2px rgba(6, 11, 22, 0.9),
+    0 0 0 3px rgba(112, 199, 220, 0.08);
   color: transparent !important;
   font-size: 0 !important;
   text-shadow: none;
+  transform: scale(0.72);
+  transform-origin: center;
+}
+
+.gitkraken-graph-mount .commit-zone.column-1 .avatar.node {
+  background-color: rgba(76, 166, 189, 0.84) !important;
+}
+
+.gitkraken-graph-mount .commit-zone.column-2 .avatar.node {
+  background-color: rgba(64, 118, 205, 0.82) !important;
+  border-color: rgba(118, 221, 170, 0.6);
+}
+
+.gitkraken-graph-mount .commit-zone .node.merge-node {
+  background-color: rgba(112, 199, 220, 0.88) !important;
+  box-shadow: 0 0 0 2px rgba(6, 11, 22, 0.9);
+  transform: scale(0.82);
+  transform-origin: center;
+}
+
+.gitkraken-graph-mount .scrollbar-outer.horizontal,
+.gitkraken-graph-mount .scrollbar-inner.horizontal_scrollbar {
+  display: none !important;
 }
 
 .gitkraken-graph-mount .commit-sha-zone .font-monospace,
