@@ -2669,48 +2669,64 @@ function renderStep(step) {
 }
 
 function renderProjects() {
+  const activeProjectId = Number(projectIdForActions() || 0);
+  const apiBaseLabel = state.localDemoActive ? "Local Demo" : state.apiBase;
   return `
     <div class="two-column">
       <section class="panel">
         <div class="panel-header">
           <h3>Project Registry</h3>
-          <span>${state.projects.length} projects</span>
+          <div class="row-actions compact-actions">
+            <span>${state.projects.length} projects</span>
+            <button type="button" data-route="git" ${activeProjectId ? "" : "disabled"}>Git Workspace</button>
+          </div>
         </div>
         <div class="list-stack">
           ${state.projects.length
             ? state.projects
                 .map(
                   (project) => `
-                <button class="list-item ${project.id === Number(state.selectedProjectId) ? "active" : ""}" data-select-project="${project.id}" type="button">
+                <article class="list-item ${project.id === Number(state.selectedProjectId) ? "active" : ""}">
                   <strong>${escapeHtml(displayValue(project.name))}</strong>
                   <span>${escapeHtml(displayValue(project.path))}</span>
                   <small>${escapeHtml(displayValue(project.description))}</small>
-                </button>
+                  <div class="row-actions">
+                    <button type="button" data-select-project="${project.id}">打开 Dashboard</button>
+                    <button type="button" data-open-project-git="${project.id}">打开 Git Workspace</button>
+                  </div>
+                </article>
               `
                 )
                 .join("")
-            : `<p class="muted-copy">${MISSING_VALUE}</p>`}
+            : `
+              <div class="empty-guidance">
+                <strong>当前后端没有登记项目</strong>
+                <p>当前 API Base：<code>${escapeHtml(apiBaseLabel)}</code></p>
+                <p>右侧登记已有工作区路径；它不会创建目录，只把这个路径加入 ProjectPilot 管理。</p>
+              </div>
+            `}
         </div>
       </section>
       <section class="panel">
         <div class="panel-header">
-          <h3>Add Project</h3>
+          <h3>Register Workspace</h3>
           <span>POST /projects</span>
         </div>
         <form class="stack-form" data-project-form data-draft-form="project">
           <label>
             <span>项目名称</span>
-            <input name="name" type="text" value="${escapeHtml(state.drafts.project.name)}" autocomplete="off" />
+            <input name="name" type="text" value="${escapeHtml(state.drafts.project.name)}" placeholder="ProjectPilot Git Demo" autocomplete="off" />
           </label>
           <label>
             <span>项目路径</span>
-            <input name="path" type="text" value="${escapeHtml(state.drafts.project.path)}" autocomplete="off" />
+            <input name="path" type="text" value="${escapeHtml(state.drafts.project.path)}" placeholder="/Users/eddz/work/projectpilot-demo" autocomplete="off" />
           </label>
           <label>
             <span>说明</span>
             <textarea name="description">${escapeHtml(state.drafts.project.description)}</textarea>
           </label>
-          <button type="submit" ${actionAttrs("create-project")}>${actionText("create-project", "创建项目", "创建中...")}</button>
+          <p class="form-note">登记成功后会直接进入 Git Workspace。后续的检测、修复、提交和同步都从 Git Workspace 发起。</p>
+          <button type="submit" ${actionAttrs("create-project")}>${actionText("create-project", "登记工作区", "登记中...")}</button>
         </form>
       </section>
     </div>
@@ -3830,6 +3846,14 @@ function bindShell() {
     });
   });
 
+  document.querySelectorAll("[data-open-project-git]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.selectedProjectId = Number(button.dataset.openProjectGit);
+      state.route = "git";
+      await loadData({ silent: true });
+    });
+  });
+
   bindFormSubmit("[data-project-form]", handleCreateProject);
   bindFormSubmit("[data-server-form]", handleCreateServer);
   bindFormSubmit("[data-binding-form]", handleBindServer);
@@ -3931,7 +3955,7 @@ async function handleCreateProject(event) {
     setToast("项目名称和路径不能为空");
     return;
   }
-  await runAction("create-project", "正在创建项目", async () => {
+  await runAction("create-project", "正在登记工作区", async () => {
     const created = await request(
       "/projects",
       { method: "POST", body },
@@ -3948,7 +3972,8 @@ async function handleCreateProject(event) {
       path: "",
       description: ""
     };
-    setToast("项目已创建");
+    state.route = "git";
+    setToast("工作区已登记");
     await loadData({ silent: true });
   });
 }

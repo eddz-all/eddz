@@ -1081,6 +1081,10 @@ td strong {
   text-align: left;
 }
 
+.list-item .row-actions {
+  margin-top: 10px;
+}
+
 .list-item.active {
   border-color: rgba(110, 108, 255, 0.85);
   background: rgba(54, 56, 125, 0.45);
@@ -1123,6 +1127,33 @@ td strong {
   color: #93a0b8;
 }
 
+.empty-guidance {
+  display: grid;
+  gap: 8px;
+  min-height: 180px;
+  align-content: center;
+  padding: 18px;
+  border: 1px dashed rgba(145, 158, 187, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 13, 24, 0.52);
+  color: #a8b3c7;
+}
+
+.empty-guidance strong {
+  color: #eef4ff;
+}
+
+.empty-guidance p {
+  margin: 0;
+}
+
+.form-note {
+  margin: -2px 0 0;
+  color: #93a0b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .key-value-list strong {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1155,6 +1186,10 @@ td strong {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.compact-actions {
+  align-items: center;
 }
 
 .step-command {
