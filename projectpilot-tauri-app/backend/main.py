@@ -11,6 +11,7 @@ from routers import (
     execution,
     executor_tasks,
     git_status,
+    git_worktree,
     operation_logs,
     projects,
     reports,
@@ -45,6 +46,7 @@ app.include_router(projects.router)
 app.include_router(servers.router)
 app.include_router(bindings.router)
 app.include_router(git_status.router)
+app.include_router(git_worktree.router)
 app.include_router(environment_snapshots.router)
 app.include_router(status.router)
 app.include_router(ai.router)

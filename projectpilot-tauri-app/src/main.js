@@ -130,6 +130,7 @@ const apiContract = [
   ["POST", "/projects/{id}/ai/config-plan", "已接入", "AI 配置计划"],
   ["POST", "/projects/{id}/ai/analyze-git", "已接入", "AI Git 分析"],
   ["GET", "/projects/{id}/git-status", "已接入", "Git 状态历史"],
+  ["GET", "/projects/{id}/git-worktree", "已接入", "Git 工作树图谱"],
   ["GET", "/projects/{id}/servers/{server_id}/git-status/latest", "已接入", "单仓库最新 Git 状态"],
   ["POST", "/projects/{id}/bind-server", "已接入", "绑定项目服务器"],
   ["DELETE", "/projects/{id}/servers/{server_id}", "已接入", "解除项目服务器绑定"],
@@ -199,7 +200,8 @@ const state = {
     servers: false,
     status: false,
     bindings: false,
-    gitStatuses: false
+    gitStatuses: false,
+    gitWorktree: false
   },
   contextProjectId: null,
   selectedProjectId: 1,
@@ -209,6 +211,7 @@ const state = {
   aiSettings: null,
   analysis: null,
   gitAnalysis: null,
+  gitWorktree: null,
   plan: null,
   actionPlan: null,
   executionResult: null,
@@ -1068,6 +1071,97 @@ function localGitAnalysis(data, projectId) {
   };
 }
 
+function localGitWorktree(data, projectId) {
+  const project = data.projects.find((item) => Number(item.id) === Number(projectId));
+  const status = localProjectStatus(data, projectId);
+  const now = Date.now();
+  const repositories = status.servers.map((server, index) => {
+    const git = server.latest_git_status || {};
+    const seed = `${projectId}${server.server_id}${index}`;
+    const headHash = `local${seed}head000000000000000000000000000000`.slice(0, 40);
+    const parentHash = `local${seed}base000000000000000000000000000000`.slice(0, 40);
+    const createdAt = parseTimestamp(git.created_at);
+    const ageMinutes = createdAt ? Math.max(2, Math.round((now - createdAt) / 60000)) : 8 + index;
+    const refs = [
+      {
+        name: git.branch || "main",
+        full_name: `refs/heads/${git.branch || "main"}`,
+        type: "branch",
+        target: headHash,
+        is_head: true,
+        upstream: git.remote_url ? `origin/${git.branch || "main"}` : null
+      }
+    ];
+    const changedFiles = git.has_uncommitted_changes ? ["src/app.js", ".env.local"] : [];
+    return {
+      success: true,
+      binding_id: server.binding_id,
+      project_id: projectId,
+      server_id: server.server_id,
+      server_name: server.server_name,
+      connection_mode: server.connection_mode,
+      project_path: server.project_path,
+      repo_path: server.project_path,
+      branch: git.branch || "main",
+      upstream: git.remote_url ? `origin/${git.branch || "main"}` : null,
+      commit: headHash,
+      ahead: Number(git.ahead || 0),
+      behind: Number(git.behind || 0),
+      state: git.has_uncommitted_changes ? "dirty" : "normal",
+      remote_urls: git.remote_url ? [git.remote_url] : [],
+      refs,
+      commits: [
+        {
+          hash: headHash,
+          short_hash: headHash.slice(0, 7),
+          parents: [parentHash],
+          subject: git.last_commit || "Local demo HEAD",
+          author: "ProjectPilot",
+          relative_time: `${index + 1} minutes ago`,
+          refs,
+          lane: 0,
+          is_merge: false,
+          is_head: true
+        },
+        {
+          hash: parentHash,
+          short_hash: parentHash.slice(0, 7),
+          parents: [],
+          subject: "Baseline workspace state",
+          author: "ProjectPilot",
+          relative_time: `${ageMinutes} minutes ago`,
+          refs: [],
+          lane: 0,
+          is_merge: false,
+          is_head: false
+        }
+      ],
+      graph_text: [`* ${headHash.slice(0, 7)} (${git.branch || "main"}) ${git.last_commit || "Local demo HEAD"}`, `* ${parentHash.slice(0, 7)} Baseline workspace state`],
+      worktree: {
+        is_clean: !git.has_uncommitted_changes,
+        state: git.has_uncommitted_changes ? "dirty" : "normal",
+        staged_files: [],
+        unstaged_files: changedFiles,
+        untracked_files: [],
+        conflicted_files: [],
+        changed_files: changedFiles.map((path) => ({ path, index_status: ".", worktree_status: "M" })),
+        counts: {
+          staged: 0,
+          unstaged: changedFiles.length,
+          untracked: 0,
+          conflicted: 0
+        }
+      }
+    };
+  });
+  return {
+    schema_version: "git-worktree.v1",
+    project_id: projectId,
+    project_name: project?.name || "Local Demo",
+    repositories
+  };
+}
+
 function localPlan(data, projectId, body = {}) {
   const targetServer = data.servers.find((server) => Number(server.id) === Number(body.target_server_id));
   return {
@@ -1229,6 +1323,9 @@ function localRequest(path, options = {}) {
     return data.gitStatuses
       .filter((item) => Number(item.project_id) === projectId)
       .sort((left, right) => parseTimestamp(right.created_at) - parseTimestamp(left.created_at));
+  }
+  if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "git-worktree") {
+    return localGitWorktree(data, Number(parts[1]));
   }
   if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "servers") {
     return localBindingRows(data, Number(parts[1]));
@@ -1778,6 +1875,7 @@ async function loadData({ silent = false } = {}) {
     state.contextProjectId = projectId || null;
     state.analysis = null;
     state.gitAnalysis = null;
+    state.gitWorktree = null;
     state.plan = null;
     state.actionPlan = null;
     state.executionResult = null;
@@ -1786,10 +1884,11 @@ async function loadData({ silent = false } = {}) {
     state.selectedServerId = null;
     state.report = "";
   }
-  const [statusResponse, bindingsResponse, gitStatusesResponse, tasksResponse, aiSettingsResponse, activitiesResponse] = await Promise.all([
+  const [statusResponse, bindingsResponse, gitStatusesResponse, gitWorktreeResponse, tasksResponse, aiSettingsResponse, activitiesResponse] = await Promise.all([
     projectId ? request(`/projects/${projectId}/status`, {}, null) : null,
     projectId ? request(`/projects/${projectId}/servers`, {}, null) : null,
     projectId ? request(`/projects/${projectId}/git-status`, { optional: true }, []) : [],
+    projectId ? request(`/projects/${projectId}/git-worktree`, { optional: true }, null) : null,
     request(projectId ? `/executor/tasks?project_id=${projectId}` : "/executor/tasks", { optional: true }, []),
     request("/ai/settings", { optional: true }, null),
     request("/operation-logs", {}, [])
@@ -1800,6 +1899,8 @@ async function loadData({ silent = false } = {}) {
   state.bindings = state.dataLoaded.bindings ? bindingsResponse : [];
   state.dataLoaded.gitStatuses = Array.isArray(gitStatusesResponse);
   state.gitStatuses = state.dataLoaded.gitStatuses ? gitStatusesResponse : [];
+  state.dataLoaded.gitWorktree = Boolean(gitWorktreeResponse?.schema_version);
+  state.gitWorktree = state.dataLoaded.gitWorktree ? gitWorktreeResponse : null;
   state.executorTasks = normalizeTaskList(tasksResponse);
   state.aiSettings = aiSettingsResponse;
   state.activities = Array.isArray(activitiesResponse) ? activitiesResponse : [];
@@ -3236,6 +3337,218 @@ function renderGitBlockedOperation(item) {
   `;
 }
 
+function gitWorktreeRepositories(rows) {
+  const repositories = state.gitWorktree?.repositories;
+  if (Array.isArray(repositories) && repositories.length) {
+    return repositories;
+  }
+  return rows.map((row) => ({
+    success: Boolean(row.raw),
+    server_id: row.server.server_id,
+    server_name: row.server.server_name,
+    connection_mode: row.server.connection_mode,
+    project_path: row.server.project_path,
+    repo_path: row.server.project_path,
+    branch: row.branch === MISSING_VALUE ? null : row.branch,
+    upstream: row.raw?.upstream || row.raw?.remote_url || null,
+    ahead: row.ahead,
+    behind: row.behind,
+    state: row.raw?.state || (row.dirty ? "dirty" : "normal"),
+    commits: row.commit && row.commit !== MISSING_VALUE
+      ? [
+          {
+            hash: row.commit,
+            short_hash: String(row.commit).split(" ")[0].slice(0, 7),
+            subject: String(row.commit).split(" ").slice(1).join(" ") || "Latest commit",
+            author: row.server.server_name,
+            relative_time: compactTime(row.timestamp),
+            refs: [],
+            parents: [],
+            lane: 0,
+            is_head: true,
+            is_merge: false
+          }
+        ]
+      : [],
+    refs: [],
+    worktree: {
+      is_clean: !row.dirty,
+      state: row.dirty ? "dirty" : "normal",
+      staged_files: row.raw?.staged_files || [],
+      unstaged_files: row.raw?.unstaged_files || [],
+      untracked_files: row.raw?.untracked_files || [],
+      conflicted_files: row.raw?.conflicted_files || [],
+      changed_files: row.raw?.changed_files || [],
+      counts: {
+        staged: (row.raw?.staged_files || []).length,
+        unstaged: (row.raw?.unstaged_files || []).length,
+        untracked: (row.raw?.untracked_files || []).length,
+        conflicted: (row.raw?.conflicted_files || []).length
+      }
+    }
+  }));
+}
+
+function repoWorktreeCounts(repo) {
+  const counts = repo.worktree?.counts || {};
+  return {
+    staged: Number(counts.staged || repo.worktree?.staged_files?.length || 0),
+    unstaged: Number(counts.unstaged || repo.worktree?.unstaged_files?.length || 0),
+    untracked: Number(counts.untracked || repo.worktree?.untracked_files?.length || 0),
+    conflicted: Number(counts.conflicted || repo.worktree?.conflicted_files?.length || 0)
+  };
+}
+
+function renderRefPills(refs = []) {
+  const visibleRefs = refs.slice(0, 8);
+  if (!visibleRefs.length) return `<span class="badge muted">no refs</span>`;
+  return visibleRefs
+    .map((ref) => `<span class="ref-pill ${escapeHtml(ref.type || "ref")}">${escapeHtml(ref.name || ref.full_name || "ref")}</span>`)
+    .join("");
+}
+
+function renderCommitGraph(repo) {
+  const commits = (repo.commits || []).slice(0, 14);
+  if (!repo.success) {
+    return `<div class="empty-guidance compact"><strong>Git graph unavailable</strong><p>${escapeHtml(displayValue(repo.message))}</p></div>`;
+  }
+  if (!commits.length) {
+    return `<p class="muted-copy">No commits returned for this repository.</p>`;
+  }
+  return `
+    <div class="commit-graph" style="--lane-count: 4">
+      ${commits.map(renderCommitNode).join("")}
+    </div>
+  `;
+}
+
+function renderCommitNode(commit) {
+  const lane = Math.max(0, Math.min(Number(commit.lane || 0), 3));
+  const refs = commit.refs || [];
+  return `
+    <article class="commit-node" style="--lane: ${lane}">
+      <div class="commit-rail" aria-hidden="true"><span></span></div>
+      <div class="commit-card ${commit.is_head ? "head" : ""}">
+        <div class="commit-title">
+          <strong>${escapeHtml(displayValue(commit.subject))}</strong>
+          <code>${escapeHtml(displayValue(commit.short_hash || String(commit.hash || "").slice(0, 7)))}</code>
+        </div>
+        <div class="commit-meta">
+          <span>${escapeHtml(displayValue(commit.author))}</span>
+          <span>${escapeHtml(displayValue(commit.relative_time))}</span>
+          ${commit.is_merge ? `<span class="badge warning">merge</span>` : ""}
+        </div>
+        <div class="ref-row">${renderRefPills(refs)}</div>
+      </div>
+    </article>
+  `;
+}
+
+function uniquePaths(paths = []) {
+  return [...new Set(paths.filter(Boolean).map(String))];
+}
+
+function renderWorktreeSection(title, paths, tone) {
+  const safePaths = uniquePaths(paths);
+  return `
+    <section class="worktree-section">
+      <div class="worktree-section-title">
+        <strong>${escapeHtml(title)}</strong>
+        <span class="badge ${tone}">${safePaths.length}</span>
+      </div>
+      <div class="worktree-paths">
+        ${safePaths.length
+          ? safePaths.slice(0, 12).map((path) => renderWorktreePath(path)).join("")
+          : `<span class="empty-state">None</span>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderWorktreePath(path) {
+  const parts = String(path).split("/");
+  const file = parts.pop() || path;
+  const folder = parts.join("/");
+  return `
+    <div class="worktree-path">
+      <span>${folder ? escapeHtml(folder) : "."}</span>
+      <strong>${escapeHtml(file)}</strong>
+    </div>
+  `;
+}
+
+function renderWorktreeFiles(repo) {
+  const worktree = repo.worktree || {};
+  return `
+    <div class="worktree-files">
+      ${renderWorktreeSection("Conflicts", worktree.conflicted_files || [], "danger")}
+      ${renderWorktreeSection("Staged", worktree.staged_files || [], "healthy")}
+      ${renderWorktreeSection("Modified", worktree.unstaged_files || [], "warning")}
+      ${renderWorktreeSection("Untracked", worktree.untracked_files || [], "muted")}
+    </div>
+  `;
+}
+
+function renderGitWorktreeRepository(repo) {
+  const counts = repoWorktreeCounts(repo);
+  const dirtyTotal = counts.staged + counts.unstaged + counts.untracked + counts.conflicted;
+  const stateTone = repo.success ? (counts.conflicted ? "danger" : dirtyTotal ? "warning" : "healthy") : "danger";
+  return `
+    <article class="repo-graph-card">
+      <div class="repo-graph-header">
+        <div>
+          <p class="eyebrow">${escapeHtml(displayValue(repo.server_name))}</p>
+          <h4>${escapeHtml(displayValue(repo.branch || "detached HEAD"))}</h4>
+          <code>${escapeHtml(displayValue(repo.repo_path || repo.project_path))}</code>
+        </div>
+        <div class="repo-graph-badges">
+          <span class="badge ${stateTone}">${escapeHtml(displayValue(repo.state || "normal"))}</span>
+          <span class="badge muted">${escapeHtml(Number(repo.ahead || 0))} ahead</span>
+          <span class="badge muted">${escapeHtml(Number(repo.behind || 0))} behind</span>
+        </div>
+      </div>
+      <div class="repo-ref-strip">${renderRefPills(repo.refs || [])}</div>
+      <div class="repo-graph-body">
+        <div>
+          <h5>Commit Graph</h5>
+          ${renderCommitGraph(repo)}
+        </div>
+        <div>
+          <h5>Working Tree</h5>
+          ${renderWorktreeFiles(repo)}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderGitWorktreeGraph(rows) {
+  const repositories = gitWorktreeRepositories(rows);
+  const commitCount = repositories.reduce((total, repo) => total + (repo.commits || []).length, 0);
+  const dirtyCount = repositories.filter((repo) => {
+    const counts = repoWorktreeCounts(repo);
+    return counts.staged + counts.unstaged + counts.untracked + counts.conflicted > 0;
+  }).length;
+  return `
+    <section class="panel git-graph-panel">
+      <div class="panel-header">
+        <div>
+          <h3>Repository Graph</h3>
+          <p class="eyebrow">GitLens / Git Graph style worktree</p>
+        </div>
+        <div class="row-actions compact-actions">
+          <span>${repositories.length} repos</span>
+          <span>${commitCount} commits</span>
+          <span>${dirtyCount} dirty</span>
+        </div>
+      </div>
+      <div class="repo-graph-list">
+        ${repositories.length ? repositories.map(renderGitWorktreeRepository).join("") : `<p class="muted-copy">No repository graph returned.</p>`}
+      </div>
+    </section>
+  `;
+}
+
 function gitIssueReportForWorkspace(rows) {
   return state.gitAnalysis?.issue_report || {
     ...buildGitIssueReport(gitRepositoriesFromRows(rows)),
@@ -3417,6 +3730,8 @@ function renderGitWorkspace() {
           <button type="button" data-route="tasks">Task Stream</button>
         </div>
       </section>
+
+      ${renderGitWorktreeGraph(rows)}
 
       ${renderGitIssueBoard(issueReport)}
 

@@ -750,6 +750,214 @@ td span,
   color: #eef4ff;
 }
 
+.git-graph-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.repo-graph-list {
+  display: grid;
+  gap: 14px;
+}
+
+.repo-graph-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(145, 158, 187, 0.14);
+  border-radius: 8px;
+  background: rgba(8, 13, 24, 0.58);
+}
+
+.repo-graph-header,
+.repo-graph-body {
+  display: grid;
+  gap: 14px;
+}
+
+.repo-graph-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.repo-graph-header h4 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.repo-graph-header code {
+  color: #b8f0ff;
+  overflow-wrap: anywhere;
+}
+
+.repo-graph-badges,
+.repo-ref-strip,
+.ref-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.repo-graph-body {
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  align-items: start;
+}
+
+.repo-graph-body h5 {
+  margin: 0 0 10px;
+  color: #eef4ff;
+  font-size: 14px;
+}
+
+.ref-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(145, 158, 187, 0.16);
+  border-radius: 999px;
+  color: #dbe6fa;
+  background: rgba(18, 25, 43, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ref-pill.branch {
+  color: #76efac;
+  background: rgba(31, 199, 113, 0.14);
+}
+
+.ref-pill.remote {
+  color: #8fe7ff;
+  background: rgba(60, 170, 210, 0.14);
+}
+
+.ref-pill.tag {
+  color: #f9c75d;
+  background: rgba(249, 174, 55, 0.14);
+}
+
+.commit-graph {
+  display: grid;
+  gap: 0;
+}
+
+.commit-node {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  min-height: 76px;
+}
+
+.commit-rail {
+  position: relative;
+  min-height: 76px;
+}
+
+.commit-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(14px + var(--lane) * 14px);
+  width: 2px;
+  background: rgba(143, 231, 255, 0.28);
+}
+
+.commit-rail span {
+  position: absolute;
+  top: 18px;
+  left: calc(8px + var(--lane) * 14px);
+  width: 14px;
+  height: 14px;
+  border: 3px solid #8fe7ff;
+  border-radius: 999px;
+  background: #080d18;
+  box-shadow: 0 0 0 4px rgba(143, 231, 255, 0.1);
+}
+
+.commit-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid rgba(145, 158, 187, 0.14);
+  border-radius: 8px;
+  background: rgba(18, 25, 43, 0.72);
+}
+
+.commit-card.head {
+  border-color: rgba(118, 239, 172, 0.3);
+  background: rgba(15, 45, 38, 0.38);
+}
+
+.commit-title,
+.commit-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.commit-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-title code {
+  color: #b8f0ff;
+}
+
+.commit-meta {
+  justify-content: flex-start;
+  color: #93a0b8;
+  font-size: 12px;
+}
+
+.worktree-files,
+.worktree-section,
+.worktree-paths {
+  display: grid;
+  gap: 10px;
+}
+
+.worktree-section {
+  padding: 10px;
+  border: 1px solid rgba(145, 158, 187, 0.12);
+  border-radius: 8px;
+  background: rgba(18, 25, 43, 0.48);
+}
+
+.worktree-section-title,
+.worktree-path {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.worktree-path {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: rgba(8, 13, 24, 0.56);
+}
+
+.worktree-path span {
+  min-width: 0;
+  overflow: hidden;
+  color: #93a0b8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-path strong {
+  min-width: 0;
+  color: #eef4ff;
+  overflow-wrap: anywhere;
+}
+
 .sparkline {
   position: absolute;
   right: 18px;
@@ -1424,7 +1632,8 @@ code,
   .two-column,
   .report-layout,
   .ops-layout,
-  .git-layout {
+  .git-layout,
+  .repo-graph-body {
     grid-template-columns: 1fr;
   }
 
@@ -1500,9 +1709,11 @@ code,
   }
 
   .git-control-band,
-  .git-operation {
+  .git-operation,
+  .repo-graph-header {
     align-items: stretch;
     flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .git-operation > .badge {
