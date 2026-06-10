@@ -2621,7 +2621,6 @@ function render() {
       <main class="main-surface">
         ${renderTopbar()}
         <section class="workspace" data-route="${state.route}">
-          ${renderConnectionBanner()}
           ${renderRoute()}
         </section>
       </main>
@@ -4609,6 +4608,7 @@ function renderSettings() {
   const localData = readLocalDemoData();
   const mode = backendModeMeta();
   return `
+    ${renderConnectionBanner()}
     <div class="two-column">
       <section class="panel">
         <div class="panel-header">
@@ -4635,7 +4635,6 @@ function renderSettings() {
           <span>Tasks</span><strong>${escapeHtml(localData.executorTasks.length)}</strong>
           <span>Last Issue</span><strong>${escapeHtml(displayValue(state.backendIssue))}</strong>
         </div>
-        <button class="full-button" type="button" data-use-local-demo ${actionAttrs("use-local-demo")}>${actionText("use-local-demo", "Use Local Demo")}</button>
       </section>
       <section class="panel">
         <div class="panel-header">
