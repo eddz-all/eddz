@@ -1644,6 +1644,18 @@ td strong {
   margin-top: 10px;
 }
 
+.list-item .row-actions button {
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #ffffff;
+  background: rgba(91, 92, 255, 0.22);
+}
+
+.list-item .row-actions button:first-child {
+  background: linear-gradient(135deg, #5b5cff, #7d54ff);
+}
+
 .list-item.active {
   border-color: rgba(110, 108, 255, 0.85);
   background: rgba(54, 56, 125, 0.45);
@@ -2005,6 +2017,10 @@ code,
   .dashboard-grid,
   .git-summary-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .dashboard-grid > .metric-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .workflow-rail {

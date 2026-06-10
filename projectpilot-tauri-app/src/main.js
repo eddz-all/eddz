@@ -229,7 +229,8 @@ const state = {
   gitStatuses: [],
   executorTaskDetail: null,
   report: "",
-  lastSync: null
+  lastSync: null,
+  scrollToTopAfterRender: false
 };
 
 function readSession() {
@@ -2496,6 +2497,25 @@ function updateToast() {
   app?.insertAdjacentHTML("beforeend", renderToast());
 }
 
+function navigateTo(route) {
+  if (!route) {
+    return;
+  }
+  state.scrollToTopAfterRender = true;
+  state.route = route;
+}
+
+function applyPendingScrollReset() {
+  if (!state.scrollToTopAfterRender) {
+    return;
+  }
+  state.scrollToTopAfterRender = false;
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.querySelector(".main-surface")?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
+  });
+}
+
 function render() {
   const editingState = captureEditingState();
   const app = document.querySelector("#app");
@@ -2525,6 +2545,7 @@ function render() {
   bindShell();
   restoreEditingState(editingState);
   gitKrakenGraphRenderer.mount();
+  applyPendingScrollReset();
 }
 
 function renderLogin() {
@@ -2613,7 +2634,7 @@ function backendModeMeta() {
       className: "local",
       label: "Local demo",
       summary: "Local Demo Store",
-      detail: state.backendIssue || "Remote backend is unavailable."
+      detail: "Using browser localStorage as the demo backend."
     };
   }
   if (state.backendMode === "error") {
@@ -2676,7 +2697,7 @@ function renderConnectionBanner() {
         <span>${escapeHtml(mode.detail)}</span>
       </div>
       <div class="row-actions">
-        <button type="button" data-use-local-demo ${actionAttrs("use-local-demo")}>${actionText("use-local-demo", "Use Local Demo")}</button>
+        ${state.backendMode === "local" ? "" : `<button type="button" data-use-local-demo ${actionAttrs("use-local-demo")}>${actionText("use-local-demo", "Use Local Demo")}</button>`}
         <button type="button" data-retry-backend ${actionAttrs("retry-backend")}>${actionText("retry-backend", "Retry Backend", "Retrying...")}</button>
       </div>
     </section>
@@ -4564,7 +4585,7 @@ function bindLogin() {
       initials: name.slice(0, 2).toUpperCase()
     };
     saveSession(state.user);
-    state.route = "dashboard";
+    navigateTo("dashboard");
     await loadData();
   });
 
@@ -4576,7 +4597,7 @@ function bindShell() {
 
   document.querySelectorAll("[data-route]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.route = button.dataset.route;
+      navigateTo(button.dataset.route);
       render();
     });
   });
@@ -4610,7 +4631,7 @@ function bindShell() {
   document.querySelectorAll("[data-select-project]").forEach((button) => {
     button.addEventListener("click", async () => {
       state.selectedProjectId = Number(button.dataset.selectProject);
-      state.route = "dashboard";
+      navigateTo("dashboard");
       await loadData({ silent: true });
     });
   });
@@ -4618,7 +4639,7 @@ function bindShell() {
   document.querySelectorAll("[data-open-project-git]").forEach((button) => {
     button.addEventListener("click", async () => {
       state.selectedProjectId = Number(button.dataset.openProjectGit);
-      state.route = "git";
+      navigateTo("git");
       await loadData({ silent: true });
     });
   });
@@ -4741,7 +4762,7 @@ async function handleCreateProject(event) {
       path: "",
       description: ""
     };
-    state.route = "git";
+    navigateTo("git");
     setToast("工作区已登记");
     await loadData({ silent: true });
   });
@@ -4951,7 +4972,7 @@ async function handleReport() {
       return;
     }
     state.report = report.content;
-    state.route = "reports";
+    navigateTo("reports");
     setToast("报告已生成");
     render();
   });
@@ -5086,7 +5107,7 @@ async function handleAnalyzeGit() {
 
     state.gitAnalysis = result;
     if (state.route !== "git") {
-      state.route = "reports";
+      navigateTo("reports");
     }
     setToast("Git AI 分析已返回");
     render();
@@ -5198,7 +5219,7 @@ async function handleServerDetail(serverId) {
 
     state.selectedServerId = serverId;
     state.serverDetail = detail;
-    state.route = "serverDetail";
+    navigateTo("serverDetail");
     setToast("服务器详情已返回");
     render();
   });
@@ -5222,7 +5243,7 @@ async function handleTaskDetail(taskId) {
     }
 
     state.executorTaskDetail = detail;
-    state.route = "tasks";
+    navigateTo("tasks");
     setToast("Task 详情已返回");
     render();
   });
