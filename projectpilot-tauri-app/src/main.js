@@ -18,6 +18,8 @@ const apiContract = [
   ["POST", "/projects/{id}/ai/analyze-env", "已接入", "AI 环境分析"],
   ["POST", "/projects/{id}/ai/config-plan", "已接入", "AI 配置计划"],
   ["POST", "/projects/{id}/ai/analyze-git", "已接入", "AI Git 分析"],
+  ["GET", "/projects/{id}/git-status", "已接入", "Git 状态历史"],
+  ["GET", "/projects/{id}/servers/{server_id}/git-status/latest", "已接入", "单仓库最新 Git 状态"],
   ["POST", "/projects/{id}/bind-server", "已接入", "绑定项目服务器"],
   ["DELETE", "/projects/{id}/servers/{server_id}", "已接入", "解除项目服务器绑定"],
   ["POST", "/reports/project", "已接入", "Markdown 报告"],
@@ -85,7 +87,8 @@ const state = {
     projects: false,
     servers: false,
     status: false,
-    bindings: false
+    bindings: false,
+    gitStatuses: false
   },
   contextProjectId: null,
   selectedProjectId: 1,
@@ -100,6 +103,7 @@ const state = {
   executionResult: null,
   activities: [],
   executorTasks: [],
+  gitStatuses: [],
   executorTaskDetail: null,
   report: "",
   lastSync: null
@@ -645,6 +649,125 @@ function localAnalysis(data, projectId) {
   };
 }
 
+function localGitAnalysis(data, projectId) {
+  const project = data.projects.find((item) => Number(item.id) === Number(projectId));
+  const status = localProjectStatus(data, projectId);
+  const repositories = status.servers.map((server) => {
+    const git = server.latest_git_status || {};
+    return {
+      server_id: server.server_id,
+      server_name: server.server_name,
+      project_path: server.project_path,
+      branch: git.branch || null,
+      remote_url: git.remote_url || null,
+      ahead: Number(git.ahead || 0),
+      behind: Number(git.behind || 0),
+      has_uncommitted_changes: Boolean(git.has_uncommitted_changes),
+      last_commit: git.last_commit || null,
+      created_at: git.created_at || null
+    };
+  });
+  const missing = repositories.filter((repo) => !repo.branch).length;
+  const dirty = repositories.filter((repo) => repo.has_uncommitted_changes).length;
+  const ahead = repositories.filter((repo) => repo.ahead > 0).length;
+  const behind = repositories.filter((repo) => repo.behind > 0).length;
+  const branchDrift = repositories.filter((repo) => repo.branch && repo.branch !== "main").length;
+  const risk = missing || dirty || behind ? "medium" : ahead || branchDrift ? "low" : "low";
+  const firstRepo = repositories[0] || {};
+  const operationPlans = [];
+  const blockedOperations = [];
+  const nextSteps = [];
+  const warnings = [];
+
+  if (!repositories.length) {
+    warnings.push("No bound repositories were found for this project.");
+    nextSteps.push("Bind a server path before running smart Git analysis.");
+  }
+  if (missing) {
+    blockedOperations.push({
+      operation: "apply_git_operation",
+      reason: "Git status is missing for at least one bound path."
+    });
+    nextSteps.push("Run detection for every bound server before planning write operations.");
+  }
+  if (dirty) {
+    operationPlans.push({
+      operation: "commit_plan",
+      command: ["projectpilot", "git", "commit-plan", firstRepo.project_path || project?.path || "."],
+      risk: "low",
+      requires_confirmation: false
+    });
+    nextSteps.push("Review the commit plan before staging files.");
+  }
+  if (behind || ahead) {
+    operationPlans.push({
+      operation: "sync_plan",
+      command: ["projectpilot", "git", "sync-plan", firstRepo.project_path || project?.path || "."],
+      risk: behind ? "medium" : "low",
+      requires_confirmation: false
+    });
+    nextSteps.push("Inspect the sync plan before pull, rebase, or push.");
+  }
+  if (branchDrift) {
+    nextSteps.push("Confirm the target branch before merge, push, or deployment.");
+  }
+  if (!operationPlans.length && repositories.length && !missing) {
+    operationPlans.push({
+      operation: "status_review",
+      command: ["projectpilot", "git", "status", firstRepo.project_path || project?.path || "."],
+      risk: "low",
+      requires_confirmation: false
+    });
+    nextSteps.push("Repository state is ready for review.");
+  }
+
+  return {
+    success: true,
+    schema_version: "smart-git.v1",
+    project_id: projectId,
+    repo_path: firstRepo.project_path || project?.path || null,
+    branch: firstRepo.branch || null,
+    upstream: firstRepo.remote_url || null,
+    commit: firstRepo.last_commit || null,
+    risk,
+    state: dirty ? "dirty" : behind && ahead ? "diverged" : behind ? "behind" : ahead ? "ahead" : missing ? "unknown" : "ready",
+    summary: `${repositories.length} bound repositories, ${dirty} dirty, ${ahead} ahead, ${behind} behind`,
+    findings: [
+      repositories.length ? `${repositories.length} 个绑定仓库已进入 Git Workspace` : "当前项目还没有绑定仓库",
+      dirty ? `${dirty} 个仓库有未提交变更` : "没有检测到未提交变更",
+      behind ? `${behind} 个仓库落后远端` : "没有检测到落后远端",
+      "GUI 只生成状态、计划和任务入口；写操作仍需要 executor/CLI 审批边界"
+    ],
+    reports: {
+      status: {
+        repositories
+      },
+      map: {
+        risk,
+        repositories: repositories.map((repo) => ({
+          name: repo.server_name,
+          branch: repo.branch,
+          state: repo.has_uncommitted_changes ? "dirty" : repo.behind ? "behind" : repo.ahead ? "ahead" : "ready"
+        }))
+      },
+      sync_plan: {
+        risk,
+        operation_plans: operationPlans,
+        blocked_operations: blockedOperations,
+        next_steps: nextSteps
+      },
+      commit_plan: {
+        warnings,
+        repositories: repositories.filter((repo) => repo.has_uncommitted_changes)
+      }
+    },
+    operation_plans: operationPlans,
+    blocked_operations: blockedOperations,
+    next_steps: nextSteps,
+    warnings
+  };
+}
+
 function localPlan(data, projectId, body = {}) {
   const targetServer = data.servers.find((server) => Number(server.id) === Number(body.target_server_id));
   return {
@@ -801,8 +924,24 @@ function localRequest(path, options = {}) {
   if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "status") {
     return localProjectStatus(data, Number(parts[1]));
   }
+  if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "git-status") {
+    const projectId = Number(parts[1]);
+    return data.gitStatuses
+      .filter((item) => Number(item.project_id) === projectId)
+      .sort((left, right) => parseTimestamp(right.created_at) - parseTimestamp(left.created_at));
+  }
   if (method === "GET" && parts.length === 3 && parts[0] === "projects" && parts[2] === "servers") {
     return localBindingRows(data, Number(parts[1]));
+  }
+  if (
+    method === "GET" &&
+    parts.length === 6 &&
+    parts[0] === "projects" &&
+    parts[2] === "servers" &&
+    parts[4] === "git-status" &&
+    parts[5] === "latest"
+  ) {
+    return localLatestByServer(data.gitStatuses, Number(parts[1]), Number(parts[3])) || null;
   }
   if (method === "POST" && parts.length === 3 && parts[0] === "projects" && parts[2] === "bind-server") {
     const projectId = Number(parts[1]);
@@ -882,15 +1021,22 @@ function localRequest(path, options = {}) {
     return localAnalysis(data, Number(parts[1]));
   }
   if (method === "POST" && parts.length === 4 && parts[0] === "projects" && parts[2] === "ai" && parts[3] === "analyze-git") {
-    return {
+    const analysis = localGitAnalysis(data, Number(parts[1]));
+    localAddTask(data, {
       project_id: Number(parts[1]),
-      status: "completed",
-      summary: "Local Git analysis completed",
-      findings: [
-        "Main branch is visible in local demo data.",
-        "Executor stays headless; task records are reported through the GUI."
-      ]
-    };
+      server_id: analysis.reports?.status?.repositories?.[0]?.server_id || null,
+      task_type: "smart_git_analyze",
+      message: "Local smart Git analysis completed",
+      result: analysis
+    });
+    localAddOperationLog(data, {
+      project_id: Number(parts[1]),
+      operation_type: "smart_git_analyze",
+      risk_level: analysis.risk || "low",
+      summary: "Generated local smart Git analysis",
+      detail: analysis.summary
+    });
+    return commit(analysis);
   }
   if (method === "POST" && parts.length === 4 && parts[0] === "projects" && parts[2] === "ai" && parts[3] === "config-plan") {
     return localPlan(data, Number(parts[1]), body);
@@ -1340,9 +1486,10 @@ async function loadData({ silent = false } = {}) {
     state.selectedServerId = null;
     state.report = "";
   }
-  const [statusResponse, bindingsResponse, tasksResponse, aiSettingsResponse, activitiesResponse] = await Promise.all([
+  const [statusResponse, bindingsResponse, gitStatusesResponse, tasksResponse, aiSettingsResponse, activitiesResponse] = await Promise.all([
     projectId ? request(`/projects/${projectId}/status`, {}, null) : null,
     projectId ? request(`/projects/${projectId}/servers`, {}, null) : null,
+    projectId ? request(`/projects/${projectId}/git-status`, { optional: true }, []) : [],
     request(projectId ? `/executor/tasks?project_id=${projectId}` : "/executor/tasks", { optional: true }, []),
     request("/ai/settings", { optional: true }, null),
     request("/operation-logs", {}, [])
@@ -1351,6 +1498,8 @@ async function loadData({ silent = false } = {}) {
   state.status = statusResponse || { project: project || null, servers: [] };
   state.dataLoaded.bindings = Array.isArray(bindingsResponse);
   state.bindings = state.dataLoaded.bindings ? bindingsResponse : [];
+  state.dataLoaded.gitStatuses = Array.isArray(gitStatusesResponse);
+  state.gitStatuses = state.dataLoaded.gitStatuses ? gitStatusesResponse : [];
   state.executorTasks = normalizeTaskList(tasksResponse);
   state.aiSettings = aiSettingsResponse;
   state.activities = Array.isArray(activitiesResponse) ? activitiesResponse : [];
@@ -1371,6 +1520,20 @@ function executorTaskTimestamp(task) {
     parseTimestamp(task.claimed_at),
     parseTimestamp(task.created_at)
   );
+}
+
+function latestProjectGitStatus(serverId) {
+  const projectId = Number(state.selectedProjectId || state.status?.project?.id || selectedProject()?.id);
+  if (!Number.isFinite(projectId)) {
+    return null;
+  }
+  return (state.gitStatuses || [])
+    .filter(
+      (item) =>
+        Number(item.server_id) === Number(serverId) &&
+        (!item.project_id || Number(item.project_id) === projectId)
+    )
+    .sort((left, right) => parseTimestamp(right.created_at) - parseTimestamp(left.created_at))[0] || null;
 }
 
 function latestExecutorTask(serverId, taskType) {
@@ -1433,7 +1596,8 @@ function currentStatusServers() {
       ...statusServer,
       server_id: serverId,
       server_name: statusServer.server_name || binding.server_name || serverRecord?.name,
-      project_path: statusServer.project_path || binding.project_path
+      project_path: statusServer.project_path || binding.project_path,
+      latest_git_status: statusServer.latest_git_status || binding.latest_git_status || latestProjectGitStatus(serverId)
     };
     return {
       ...server,
@@ -1802,6 +1966,7 @@ function renderSidebar() {
     ["projects", "Projects", "□"],
     ["servers", "Servers", "▤"],
     ["bindings", "Bindings", "⇄"],
+    ["git", "Git Workspace", "⎇"],
     ["reports", "AI Ops", "✦"],
     ["tasks", "Tasks", "≡"],
     ["api", "API Map", "⌁"],
@@ -1928,6 +2093,7 @@ function pageTitle() {
     servers: "Servers",
     serverDetail: "Server Detail",
     bindings: "Bindings",
+    git: "Git Workspace",
     reports: "AI Ops",
     tasks: "Executor Tasks",
     api: "API Map",
@@ -1943,6 +2109,7 @@ function renderRoute() {
   if (state.route === "servers") return renderServers();
   if (state.route === "serverDetail") return renderServerDetail();
   if (state.route === "bindings") return renderBindings();
+  if (state.route === "git") return renderGitWorkspace();
   if (state.route === "reports") return renderReports();
   if (state.route === "tasks") return renderTasks();
   if (state.route === "api") return renderApiMap();
@@ -2507,6 +2674,389 @@ function renderBindings() {
           </label>
           <button type="submit" ${!projectId ? "disabled" : actionAttrs("bind-server")}>${actionText("bind-server", "绑定服务器", "绑定中...")}</button>
         </form>
+      </section>
+    </div>
+  `;
+}
+
+function gitTaskTypes() {
+  return new Set([
+    "detect_git",
+    "detect_remote_git_status",
+    "smart_git_analyze",
+    "apply_git_operation",
+    "apply_remote_git_operation"
+  ]);
+}
+
+function gitRawForServer(server) {
+  const statusRecord = latestProjectGitStatus(server.server_id) || server.latest_git_status || null;
+  const task = server.latest_executor_git_task;
+  if (task && isTaskNewerThanRecord(task, statusRecord)) {
+    const result = task.result || {};
+    const taskTime = task.completed_at || task.claimed_at || task.created_at;
+    if (task.status === "completed" && result.success !== false) {
+      return {
+        ...result,
+        created_at: result.created_at || taskTime,
+        source: "executor_task"
+      };
+    }
+    return {
+      branch: task.status,
+      last_commit: executorTaskMessage(task),
+      created_at: taskTime,
+      task_status: task.status,
+      source: "executor_task",
+      unavailable: true
+    };
+  }
+
+  return statusRecord ? { ...statusRecord, source: "git_status" } : null;
+}
+
+function gitSyncMeta(raw) {
+  if (!raw) {
+    return { label: "No Status", tone: "muted" };
+  }
+  if (raw.unavailable && isPendingTaskStatus(raw.task_status)) {
+    return { label: "Detecting", tone: "warning" };
+  }
+  if (raw.unavailable) {
+    return { label: "Detect Failed", tone: "danger" };
+  }
+
+  const ahead = Number(raw.ahead || 0);
+  const behind = Number(raw.behind || 0);
+  const dirty = Boolean(raw.has_uncommitted_changes);
+  const branch = raw.branch;
+
+  if (dirty && behind) return { label: "Dirty + Behind", tone: "danger" };
+  if (ahead && behind) return { label: "Diverged", tone: "danger" };
+  if (dirty) return { label: "Uncommitted", tone: "warning" };
+  if (behind) return { label: "Behind", tone: "warning" };
+  if (ahead) return { label: "Ahead", tone: "warning" };
+  if (branch && branch !== "main") return { label: "Branch Review", tone: "warning" };
+  return { label: "Ready", tone: "healthy" };
+}
+
+function gitWorkspaceRows() {
+  return currentStatusServers().map((server) => {
+    const raw = gitRawForServer(server);
+    const git = gitDisplay(server);
+    const sync = gitSyncMeta(raw);
+    return {
+      server,
+      raw,
+      git,
+      sync,
+      branch: raw?.branch || git.branch,
+      commit: raw?.last_commit || raw?.commit || git.commit,
+      ahead: Number(raw?.ahead || 0),
+      behind: Number(raw?.behind || 0),
+      dirty: Boolean(raw?.has_uncommitted_changes),
+      timestamp: raw?.created_at || git.timestamp
+    };
+  });
+}
+
+function gitNextActions(row) {
+  if (!row.raw) {
+    return [
+      "Run detection for this binding",
+      "Confirm the bound project path",
+      "Block write operations until status exists"
+    ];
+  }
+  if (row.sync.tone === "danger") {
+    return [
+      "Review working tree before sync",
+      "Generate a sync plan",
+      "Require explicit approval before apply"
+    ];
+  }
+  if (row.dirty) {
+    return [
+      "Generate a commit plan",
+      "Review diff grouping",
+      "Stage only approved files"
+    ];
+  }
+  if (row.behind || row.ahead) {
+    return [
+      "Generate a sync plan",
+      "Check upstream and branch target",
+      "Apply through executor only after approval"
+    ];
+  }
+  if (row.branch !== "main") {
+    return [
+      "Confirm branch target",
+      "Review merge or push plan",
+      "Keep deployment blocked until branch is approved"
+    ];
+  }
+  return [
+    "Review status",
+    "Run smart Git analysis",
+    "Keep write operations behind executor approval"
+  ];
+}
+
+function renderGitMetric(title, value, helper, tone) {
+  return `
+    <section class="metric-card git-${tone}">
+      <span>${escapeHtml(title)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(helper)}</small>
+    </section>
+  `;
+}
+
+function renderGitRepositoryRow(row) {
+  const server = row.server;
+  return `
+    <tr>
+      <td>
+        <strong>${escapeHtml(server.server_name)}</strong>
+        <span>${escapeHtml(server.host)}:${escapeHtml(server.port)} · ${escapeHtml(server.connection_mode)}</span>
+      </td>
+      <td><code>${escapeHtml(displayValue(server.project_path))}</code></td>
+      <td class="${row.git.className}">${escapeHtml(displayValue(row.branch))}</td>
+      <td>
+        <span class="badge ${row.sync.tone}">${escapeHtml(row.sync.label)}</span>
+        <small>${escapeHtml(row.ahead)} ahead · ${escapeHtml(row.behind)} behind</small>
+      </td>
+      <td>${row.dirty ? `<span class="badge warning">dirty</span>` : `<span class="badge healthy">clean</span>`}</td>
+      <td>
+        <strong>${escapeHtml(displayValue(row.commit))}</strong>
+        <span>${formatTime(row.timestamp)}</span>
+      </td>
+      <td>
+        <div class="row-actions">
+          <button type="button" data-detect-server="${server.server_id}" ${actionAttrs(`detect-server-${server.server_id}`)}>${actionText(`detect-server-${server.server_id}`, "Detect", "Queuing...")}</button>
+          <button type="button" data-route="tasks">Tasks</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderGitPlanCard(row, index) {
+  const path = displayValue(row.server.project_path);
+  const command = row.dirty
+    ? `projectpilot git commit-plan ${path}`
+    : row.ahead || row.behind
+      ? `projectpilot git sync-plan ${path}`
+      : `projectpilot git status ${path}`;
+  return `
+    <article class="git-plan-card">
+      <div class="git-plan-title">
+        <span>${index + 1}</span>
+        <div>
+          <strong>${escapeHtml(row.server.server_name)}</strong>
+          <small>${escapeHtml(row.sync.label)}</small>
+        </div>
+        <em class="${riskTone(row.sync.tone === "danger" ? "high" : row.sync.tone === "warning" ? "medium" : "low")}">${escapeHtml(row.sync.tone)}</em>
+      </div>
+      <code>${escapeHtml(command)}</code>
+      <ul>
+        ${gitNextActions(row).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </article>
+  `;
+}
+
+function renderGitOperationPlan(plan) {
+  const risk = plan.risk || plan.risk_level || (plan.requires_confirmation ? "medium" : "low");
+  const command = Array.isArray(plan.command)
+    ? plan.command.join(" ")
+    : plan.command || plan.description || plan.summary || MISSING_VALUE;
+  return `
+    <article class="git-operation">
+      <div>
+        <strong>${escapeHtml(displayValue(plan.operation || plan.title || plan.name))}</strong>
+        <code>${escapeHtml(command)}</code>
+      </div>
+      <span class="badge ${riskTone(risk)}">${escapeHtml(risk)}</span>
+    </article>
+  `;
+}
+
+function renderGitBlockedOperation(item) {
+  return `
+    <article class="git-operation blocked">
+      <div>
+        <strong>${escapeHtml(displayValue(item.operation || item.title || item.name))}</strong>
+        <small>${escapeHtml(displayValue(item.reason || item.message))}</small>
+      </div>
+      <span class="badge danger">blocked</span>
+    </article>
+  `;
+}
+
+function renderGitAnalysisSummary(analysis) {
+  if (!analysis) {
+    return `<p class="muted-copy">尚未返回 Git AI 分析</p>`;
+  }
+
+  const risk = analysis.risk || analysis.risk_level || (analysis.success === false ? "high" : "low");
+  const operationPlans = Array.isArray(analysis.operation_plans)
+    ? analysis.operation_plans
+    : analysis.reports?.sync_plan?.operation_plans || [];
+  const blockedOperations = Array.isArray(analysis.blocked_operations)
+    ? analysis.blocked_operations
+    : analysis.reports?.sync_plan?.blocked_operations || [];
+  const nextSteps = Array.isArray(analysis.next_steps)
+    ? analysis.next_steps
+    : analysis.reports?.sync_plan?.next_steps || [];
+  const findings = Array.isArray(analysis.findings) ? analysis.findings : [];
+
+  return `
+    <div class="git-analysis-summary">
+      <div class="key-value-list">
+        <span>Schema</span><strong>${escapeHtml(displayValue(analysis.schema_version))}</strong>
+        <span>Repository</span><strong>${escapeHtml(displayValue(analysis.repo_path))}</strong>
+        <span>Branch</span><strong>${escapeHtml(displayValue(analysis.branch))}</strong>
+        <span>State</span><strong>${escapeHtml(displayValue(analysis.state || analysis.status))}</strong>
+        <span>Risk</span><strong><span class="badge ${riskTone(risk)}">${escapeHtml(risk)}</span></strong>
+      </div>
+      ${analysis.summary ? `<p class="muted-copy">${escapeHtml(analysis.summary)}</p>` : ""}
+      <div class="git-analysis-columns">
+        <div>
+          <h4>Findings</h4>
+          <ul>${(findings.length ? findings : [displayValue(analysis.message)]).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </div>
+        <div>
+          <h4>Next Steps</h4>
+          <ul>${(nextSteps.length ? nextSteps : [MISSING_VALUE]).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </div>
+      </div>
+      <div class="git-operation-list">
+        <h4>Operation Plans</h4>
+        ${operationPlans.length ? operationPlans.map(renderGitOperationPlan).join("") : `<p class="muted-copy">${MISSING_VALUE}</p>`}
+      </div>
+      ${blockedOperations.length ? `
+        <div class="git-operation-list">
+          <h4>Blocked</h4>
+          ${blockedOperations.map(renderGitBlockedOperation).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderGitTaskItem(task) {
+  return `
+    <article class="activity-item">
+      <span class="dot ${taskStatusTone(task.status)}"></span>
+      <div>
+        <strong>${escapeHtml(displayValue(task.task_type || task.type))}</strong>
+        <small>${escapeHtml(taskServerName(task))} · ${escapeHtml(displayValue(task.status))}</small>
+      </div>
+      <time>${compactTime(task.completed_at || task.claimed_at || task.created_at)}</time>
+    </article>
+  `;
+}
+
+function renderGitWorkspace() {
+  const rows = gitWorkspaceRows();
+  const clean = rows.filter((row) => row.sync.tone === "healthy").length;
+  const attention = rows.filter((row) => row.sync.tone === "warning" || row.sync.tone === "danger").length;
+  const dirty = rows.filter((row) => row.dirty).length;
+  const gitTasks = (state.executorTasks || [])
+    .filter((task) => gitTaskTypes().has(task.task_type || task.type))
+    .slice(0, 6);
+
+  return `
+    <div class="git-workspace">
+      <div class="git-summary-grid">
+        ${renderGitMetric("Repositories", rows.length, "bound paths", "repo")}
+        ${renderGitMetric("Ready", clean, "clean state", "ready")}
+        ${renderGitMetric("Attention", attention, "needs review", "attention")}
+        ${renderGitMetric("Dirty", dirty, "uncommitted", "dirty")}
+      </div>
+
+      <section class="panel git-control-band">
+        <div>
+          <p class="eyebrow">Git Workspace</p>
+          <h3>${escapeHtml(displayValue(selectedProject()?.name || state.status?.project?.name))}</h3>
+        </div>
+        <div class="row-actions">
+          <button type="button" data-detect-project ${actionAttrs("detect-project")}>${actionText("detect-project", "Run Detection", "Queuing...")}</button>
+          <button type="button" data-analyze-git ${actionAttrs("analyze-git")}>${actionText("analyze-git", "Analyze Git", "Analyzing...")}</button>
+          <button type="button" data-route="tasks">Task Stream</button>
+        </div>
+      </section>
+
+      <div class="git-layout">
+        <section class="panel wide-list">
+          <div class="panel-header">
+            <h3>Managed Repositories</h3>
+            <span>GET /projects/{id}/git-status</span>
+          </div>
+          <div class="table-wrap">
+            <table class="git-table">
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>Path</th>
+                  <th>Branch</th>
+                  <th>Sync</th>
+                  <th>Worktree</th>
+                  <th>Last Commit</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.length ? rows.map(renderGitRepositoryRow).join("") : renderEmptyRow(7, "没有返回绑定仓库")}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Execution Boundary</h3>
+            <span>executor-safe</span>
+          </div>
+          <div class="key-value-list">
+            <span>Read</span><strong>status / diff / log</strong>
+            <span>Plan</span><strong>commit-plan / sync-plan</strong>
+            <span>Approve</span><strong>required for apply</strong>
+            <span>Execute</span><strong>headless executor</strong>
+          </div>
+        </section>
+      </div>
+
+      <div class="git-layout">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Smart Git Analysis</h3>
+            <span>POST /projects/{id}/ai/analyze-git</span>
+          </div>
+          ${renderGitAnalysisSummary(state.gitAnalysis)}
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Commit & Sync Plans</h3>
+            <span>${rows.length} targets</span>
+          </div>
+          <div class="git-plan-list">
+            ${rows.length ? rows.map(renderGitPlanCard).join("") : `<p class="muted-copy">${MISSING_VALUE}</p>`}
+          </div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h3>Recent Git Tasks</h3>
+          <button type="button" data-route="tasks">Open Tasks</button>
+        </div>
+        <div class="activity-list">
+          ${gitTasks.length ? gitTasks.map(renderGitTaskItem).join("") : `<p class="muted-copy">${MISSING_VALUE}</p>`}
+        </div>
       </section>
     </div>
   `;
@@ -3326,7 +3876,9 @@ async function handleAnalyzeGit() {
     }
 
     state.gitAnalysis = result;
-    state.route = "reports";
+    if (state.route !== "git") {
+      state.route = "reports";
+    }
     setToast("Git AI 分析已返回");
     render();
   });

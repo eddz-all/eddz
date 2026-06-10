@@ -181,7 +181,8 @@ select:focus {
 .panel-header button,
 .full-button,
 td button,
-.danger-button {
+.danger-button,
+.git-control-band button {
   min-height: 38px;
   border-radius: 8px;
   padding: 0 14px;
@@ -449,6 +450,17 @@ td span,
   margin-bottom: 18px;
 }
 
+.git-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.git-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 16px;
+}
+
 .metric-card {
   position: relative;
   min-height: 136px;
@@ -484,6 +496,173 @@ td span,
 
 .metric-card.issue strong {
   color: #ff6d8f;
+}
+
+.metric-card.git-repo strong {
+  color: #8fe7ff;
+}
+
+.metric-card.git-ready strong {
+  color: #76efac;
+}
+
+.metric-card.git-attention strong {
+  color: #f9c75d;
+}
+
+.metric-card.git-dirty strong {
+  color: #ff6d8f;
+}
+
+.git-control-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.git-control-band h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.git-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.git-table {
+  min-width: 980px;
+}
+
+.git-table small,
+.git-table code,
+.git-plan-card code,
+.git-operation code {
+  overflow-wrap: anywhere;
+}
+
+.git-table small {
+  display: block;
+  margin-top: 6px;
+  color: #93a0b8;
+}
+
+.git-plan-list,
+.git-analysis-summary,
+.git-operation-list {
+  display: grid;
+  gap: 12px;
+}
+
+.git-plan-card,
+.git-operation {
+  border: 1px solid rgba(145, 158, 187, 0.14);
+  border-radius: 8px;
+  background: rgba(18, 25, 43, 0.72);
+}
+
+.git-plan-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.git-plan-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.git-plan-title > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  color: #07111f;
+  background: #8fe7ff;
+  font-weight: 800;
+}
+
+.git-plan-title strong,
+.git-plan-title small {
+  display: block;
+}
+
+.git-plan-title small {
+  color: #93a0b8;
+}
+
+.git-plan-title em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.git-plan-title em.healthy {
+  color: #76efac;
+}
+
+.git-plan-title em.warning {
+  color: #f9c75d;
+}
+
+.git-plan-title em.danger {
+  color: #ff6d8f;
+}
+
+.git-plan-card code,
+.git-operation code {
+  display: block;
+  color: #b8f0ff;
+}
+
+.git-plan-card ul,
+.git-analysis-columns ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #c6d1e6;
+}
+
+.git-operation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+}
+
+.git-operation > .badge {
+  flex: 0 0 auto;
+}
+
+.git-operation.blocked {
+  border-color: rgba(255, 109, 143, 0.28);
+  background: rgba(78, 18, 36, 0.28);
+}
+
+.git-operation small {
+  display: block;
+  color: #a8b3c7;
+}
+
+.git-analysis-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.git-analysis-columns h4,
+.git-operation-list h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #eef4ff;
 }
 
 .sparkline {
@@ -721,6 +900,10 @@ td strong {
 
 .dot.danger {
   background: #ff6d8f;
+}
+
+.dot.muted {
+  background: #93a0b8;
 }
 
 .activity-item time {
@@ -1108,7 +1291,8 @@ code,
 }
 
 @media (max-width: 1180px) {
-  .dashboard-grid {
+  .dashboard-grid,
+  .git-summary-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
 
@@ -1119,7 +1303,8 @@ code,
   .content-grid,
   .two-column,
   .report-layout,
-  .ops-layout {
+  .ops-layout,
+  .git-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1184,8 +1369,23 @@ code,
   }
 
   .dashboard-grid,
+  .git-summary-grid,
   .workflow-rail,
   .steps {
+    grid-template-columns: 1fr;
+  }
+
+  .git-control-band,
+  .git-operation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .git-operation > .badge {
+    align-self: flex-start;
+  }
+
+  .git-analysis-columns {
     grid-template-columns: 1fr;
   }
 

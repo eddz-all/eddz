@@ -282,12 +282,23 @@ async function runScenario(cdp) {
       await waitFor(() => document.querySelectorAll('[data-task-detail]').length >= 2, "task rows");
       await click('[data-task-detail]');
       await waitFor(() => visibleText().includes("GET /executor/tasks/{task_id}"), "task detail");
-
       const taskRows = document.querySelectorAll('[data-task-detail]').length;
+
+      await click('button[data-route="git"]');
+      await waitFor(() => visibleText().includes("Managed Repositories"), "git workspace");
+      await waitFor(() => visibleText().includes(projectPath), "git workspace project path");
+      await click('[data-analyze-git]');
+      await waitFor(() => visibleText().includes("smart-git.v1"), "smart git analysis");
+      await waitFor(() => visibleText().includes("Operation Plans"), "git operation plans");
+
+      const gitRows = document.querySelectorAll('.git-table tbody tr').length;
+      const gitOperations = document.querySelectorAll('.git-operation').length;
       const failedBadges = Array.from(document.querySelectorAll(".badge")).filter((item) => /failed|error|blocked/i.test(item.textContent)).length;
       if (taskRows < 2) throw new Error("Expected at least two task rows.");
+      if (gitRows < 1) throw new Error("Expected at least one Git workspace row.");
+      if (gitOperations < 1) throw new Error("Expected at least one Git operation plan.");
 
-      return { projectName, serverName, projectPath, taskRows, failedBadges };
+      return { projectName, serverName, projectPath, taskRows, gitRows, gitOperations, failedBadges };
     })()
   `;
 
