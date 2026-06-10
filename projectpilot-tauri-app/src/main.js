@@ -2103,7 +2103,7 @@ async function request(path, options = {}, fallback) {
     if (error?.name === "AbortError") {
       error = new Error(`Request timed out after ${(options.timeoutMs || REQUEST_TIMEOUT_MS) / 1000}s`);
     }
-    const canUseLocalDemo = !error?.httpStatus || error.httpStatus >= 500;
+    const canUseLocalDemo = options.localFallback !== false && (!error?.httpStatus || error.httpStatus >= 500);
     if (canUseLocalDemo) {
       const localResult = localRequest(path, options);
       if (localResult !== null) {
@@ -5180,6 +5180,7 @@ async function handleAnalyzeGit() {
       `/projects/${projectId}/ai/analyze-git`,
       {
         method: "POST",
+        localFallback: false,
         body: {
           analyses: ["status", "doctor", "map", "sync_plan", "commit_plan"]
         }
